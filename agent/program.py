@@ -37,7 +37,7 @@ class Agent:
             case PlayerColor.RED:
                 print("Testing: RED is playing a MOVE action")
                 return MoveAction(
-                    Coord(0, 3),
+                    Coord(7, 3),
                     [Direction.Down]
                 )
             case PlayerColor.BLUE:
