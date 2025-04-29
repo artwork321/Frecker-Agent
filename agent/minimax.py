@@ -30,7 +30,7 @@ class State:
             elif cell_state.state == PlayerColor.RED:
                 self._red_frogs.append(coord)
 
-        print(self._board.render())
+        # print(self._board.render())
 
 
     def update_state(self, action: Action):
@@ -121,25 +121,16 @@ class MiniMaxAgent:
         to take an action. It must always return an action object. 
         """
 
-        # TODO: initialize num_node to cut off the tree
-        # if self._is_maximizer:
-        #     LEGAL_DIRECTION = [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
-        # else:
-        #     LEGAL_DIRECTION = [Direction.Up, Direction.Right, Direction.Left, Direction.UpLeft, Direction.UpRight]
-
-        LEGAL_DIRECTION = [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
-
         # generate actions for all frogs
         possible_actions = self.generate_actions(self._internal_state, self._color)
 
-        print(f"Possible actions: {possible_actions}")
+        # print(f"Possible actions: {possible_actions}")
 
         value = {}
         
         # for each action in possible_actions
         for action in possible_actions:
             # board apply_action(action)
-            print(action)
             self._internal_state._board.apply_action(action)
             new_state = State(self._internal_state._board)
 
@@ -149,18 +140,18 @@ class MiniMaxAgent:
             # undo the action
             self._internal_state._board.undo_action()
 
-            print(f"Try action: {action}")
-            print(f"Value: {value[action]}")
+            # print(f"Try action: {action}")
+            # print(f"Value: {value[action]}")
 
-        # if is_maximizer:  
-        #     find action with max value
-        best_action = max(value, key=value.get)
+        # if is_maximizer: find action with max value
+        if self._is_maximizer:
+            best_action = max(value, key=value.get)
 
-        # else:
-        #     find action with min value
+        # else: find action with min value
+        else:
+            best_action = min(value, key=value.get)
 
         # return best action 
-        
         return best_action
 
     # TOdo: Implement a recursive minimax algorithm to evaluate the game state
@@ -178,7 +169,6 @@ class MiniMaxAgent:
             # set highest value
             highest = -math.inf
             possible_actions = self.generate_actions(state, PlayerColor.RED)        
-            print(possible_actions) 
             
             # apply each action to the board
             for action in possible_actions:

@@ -5,4 +5,4 @@ GAME_NAME       = "Freckers"
 NUM_PLAYERS     = 2
 
 BOARD_N         = 8
-MAX_TURNS       = 3
+MAX_TURNS       = 150
