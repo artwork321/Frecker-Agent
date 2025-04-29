@@ -73,11 +73,13 @@ class MiniMaxAgent:
             case PlayerColor.BLUE:
                 print("Testing: I am playing as BLUE")
 
-    def generate_actions(self, state: State, color: PlayerColor) -> list[Action]:
+    def generate_actions(self, state: State) -> list[Action]:
         """
         Generate all possible actions for the given color.
         """
         possible_actions = []
+
+        color = state._board._turn_color
         
         if color == PlayerColor.RED:
             LEGAL_DIRECTION = [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
@@ -122,90 +124,71 @@ class MiniMaxAgent:
         """
 
         # generate actions for all frogs
-        possible_actions = self.generate_actions(self._internal_state, self._color)
-
+        possible_actions = self.generate_actions(self._internal_state)
         # print(f"Possible actions: {possible_actions}")
 
         value = {}
         
-        # for each action in possible_actions
+        # apply each action until having to stop
         for action in possible_actions:
-            # board apply_action(action)
             self._internal_state._board.apply_action(action)
+        
+            # create a new state for the action and run minimax
             new_state = State(self._internal_state._board)
-
-            # call minimax on the new board state and record the value for each action
             value[action] = self._minimax(new_state)
-
-            # undo the action
             self._internal_state._board.undo_action()
 
             # print(f"Try action: {action}")
             # print(f"Value: {value[action]}")
 
-        # if is_maximizer: find action with max value
+
         if self._is_maximizer:
             best_action = max(value, key=value.get)
-
-        # else: find action with min value
         else:
             best_action = min(value, key=value.get)
 
-        # return best action 
         return best_action
 
     # TOdo: Implement a recursive minimax algorithm to evaluate the game state
     def _minimax(self, state: State, iter: int = 0)-> float:
         """
-        Returns the minimax value of the current board state.
+        Returns the minimax value of the given state.
         """
 
         # if the game is over or the depth limit is reached, return the heuristic value
+        iter += 1
+        
         if state._board.game_over or iter >= 3:
             return self._evaluate(state)
-
-        # if self._is_maximizer:
+        
         if state._board._turn_color == PlayerColor.RED:
-            # set highest value
             highest = -math.inf
-            possible_actions = self.generate_actions(state, PlayerColor.RED)        
+            possible_actions = self.generate_actions(state)        
             
-            # apply each action to the board
             for action in possible_actions:
                 state._board.apply_action(action)
+
                 new_state = State(state._board)
-
-                # call minimax on the new board state and record the value for each action
-                iter += 1
                 value = self._minimax(new_state, iter)
-
-                # undo the action
                 state._board.undo_action()
+
                 highest = max(highest, value)
 
-            # return highest value
             return highest
-
-        # else:
+        
         else:
-            # set lowest value
             lowest = math.inf
-            possible_actions = self.generate_actions(state, PlayerColor.BLUE)   
+            possible_actions = self.generate_actions(state)   
 
-            
             for action in possible_actions:
                 state._board.apply_action(action)
-                new_state = State(state._board)
-                
-                # call minimax on the new board state and record the value for each action
-                iter += 1
-                value = self._minimax(new_state, iter)
 
-                # undo the action
+                new_state = State(state._board)
+                value = self._minimax(new_state, iter)
                 state._board.undo_action()
+
                 lowest = min(lowest, value)
 
-            # return highest value
             return lowest
         
     def _evaluate(self, state: State) -> float:
