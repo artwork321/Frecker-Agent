@@ -2,7 +2,7 @@
 # Project Part B: Game Playing Agent
 
 from referee.game import PlayerColor, Coord, Direction, \
-    Action, MoveAction, GrowAction, Board, BoardMutation    
+    Action, MoveAction, GrowAction, Board    
 import math
 
 class State:
@@ -13,10 +13,10 @@ class State:
 
     def __init__(self):
         self._board = Board()        
-        self._blue_frogs = list(Coord)
-        self._red_frogs = list(Coord)
-        self._blue_target_lilypads = list(Coord)
-        self._red_target_lilypads = list(Coord)
+        self._blue_frogs = []
+        self._red_frogs = []
+        self._blue_target_lilypads = []
+        self._red_target_lilypads = []
 
         for coord in self._board._state:
             cell_state = self._board.__getitem__(coord)
@@ -33,7 +33,7 @@ class State:
         """
         Update the internal state of the game based on the action taken.
         """
-        self._internal_state._board.apply_action(action)
+        self._board.apply_action(action)
 
         # Update the lists of blue and red pieces and lily pads      
         self._blue_frogs.clear()
@@ -45,10 +45,6 @@ class State:
                 self._blue_frogs.append(coord)
             elif cell_state == PlayerColor.RED:
                 self._red_frogs.append(coord)
-
-
-
-
 
 
 class MiniMaxAgent:
@@ -121,7 +117,7 @@ class MiniMaxAgent:
             # call minimax on the new board state and record the value for each action
             value[action] = self._minimax(self._internal_state._board)
             # undo the action
-            self._internal_state._board.undo_action(action)
+            self._internal_state._board.undo_action()
 
             print(f"Try action: {action}")
             print(f"Value: {value[action]}")
@@ -144,7 +140,7 @@ class MiniMaxAgent:
         """
 
         # if the game is over or the depth limit is reached, return the heuristic value
-        if board.game_over() or iter >= 3:
+        if board.game_over or iter >= 3:
             return self._evaluate()
 
         # if self._is_maximizer:
@@ -181,13 +177,11 @@ class MiniMaxAgent:
             for action in possible_actions:
                 self._internal_state._board.apply_action(action)
                 # call minimax on the new board state and record the value for each action
-                value = self._minimax(self._internal_state._board)
+                iter += 1
+                value = self._minimax(self._internal_state._board, iter)
                 # undo the action
-                self._internal_state._board.undo_action(action)
+                self._internal_state._board.undo_action()
                 highest = max(highest, value)
-
-                print(f"Try action: {action}")
-                print(f"Value: {value[action]}")
 
             # return highest value
             return highest
@@ -196,6 +190,7 @@ class MiniMaxAgent:
         else:
             LEGAL_DIRECTION = [Direction.Up, Direction.Right, Direction.Left, Direction.UpLeft, Direction.UpRight]
             lowest = math.inf
+            possible_actions = [GrowAction()]
 
             for direction in LEGAL_DIRECTION:
                 for blue_coord in self._internal_state._blue_frogs:
@@ -222,13 +217,11 @@ class MiniMaxAgent:
             for action in possible_actions:
                 self._internal_state._board.apply_action(action)
                 # call minimax on the new board state and record the value for each action
-                value = self._minimax(self._internal_state._board)
+                iter += 1
+                value = self._minimax(self._internal_state._board, iter)
                 # undo the action
-                self._internal_state._board.undo_action(action)
+                self._internal_state._board.undo_action()
                 lowest = min(lowest, value)
-
-                print(f"Try action: {action}")
-                print(f"Value: {value[action]}")
 
             # return highest value
             return lowest
