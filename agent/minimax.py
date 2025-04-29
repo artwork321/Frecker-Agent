@@ -2,7 +2,8 @@
 # Project Part B: Game Playing Agent
 
 from referee.game import PlayerColor, Coord, Direction, \
-    Action, MoveAction, GrowAction, Board    
+    Action, MoveAction, GrowAction, Board
+from referee.game.constants import *    
 import math
 
 class State:
@@ -11,23 +12,26 @@ class State:
     the current board, the players, and any other relevant game data.
     """
 
-    def __init__(self):
-        self._board = Board()        
+    def __init__(self, board: Board = None):
+
+        if board is None:
+            self._board = Board()   
+        else:
+           self._board = board
+
         self._blue_frogs = []
         self._red_frogs = []
-        self._blue_target_lilypads = []
-        self._red_target_lilypads = []
 
         for coord in self._board._state:
             cell_state = self._board.__getitem__(coord)
-            if cell_state == PlayerColor.BLUE:
+
+            if cell_state.state == PlayerColor.BLUE:
                 self._blue_frogs.append(coord)
-            elif cell_state == PlayerColor.RED:
+            elif cell_state.state == PlayerColor.RED:
                 self._red_frogs.append(coord)
-            elif coord.r == 7 and cell_state == "LilyPad":
-                self._red_target_lilypads.append(coord)
-            elif coord.r == 0 and cell_state == "LilyPad":
-                self._blue_target_lilypads.append(coord)
+
+        print(self._board.render())
+
 
     def update_state(self, action: Action):
         """
@@ -41,9 +45,10 @@ class State:
 
         for coord in self._board._state:
             cell_state = self._board.__getitem__(coord)
-            if cell_state == PlayerColor.BLUE:
+
+            if cell_state.state == PlayerColor.BLUE:
                 self._blue_frogs.append(coord)
-            elif cell_state == PlayerColor.RED:
+            elif cell_state.state == PlayerColor.RED:
                 self._red_frogs.append(coord)
 
 
@@ -68,6 +73,46 @@ class MiniMaxAgent:
             case PlayerColor.BLUE:
                 print("Testing: I am playing as BLUE")
 
+    def generate_actions(self, state: State, color: PlayerColor) -> list[Action]:
+        """
+        Generate all possible actions for the given color.
+        """
+        possible_actions = []
+        
+        if color == PlayerColor.RED:
+            LEGAL_DIRECTION = [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
+            frogs_coord = state._red_frogs
+        else:
+            LEGAL_DIRECTION = [Direction.Up, Direction.Right, Direction.Left, Direction.UpLeft, Direction.UpRight]
+            frogs_coord = state._blue_frogs
+
+        for direction in LEGAL_DIRECTION:
+            for frog_coord in frogs_coord:
+                # convert it into action and find multiple hops
+
+                try: 
+                    new_coord = frog_coord + direction
+                except ValueError as e:
+                    continue
+                
+                if (state._board._within_bounds(new_coord) and
+                                (state._board.__getitem__(new_coord).state == PlayerColor.BLUE
+                                or state._board.__getitem__(new_coord).state == PlayerColor.RED)): # Valid jump
+                    try:
+                        new_coord = new_coord + direction                                    
+                    except ValueError:
+                        continue  # Invalid jump move
+                
+                if (state._board.__getitem__(new_coord).state == "LilyPad"): # Valid lily pad
+                    
+                    # add them to possible_actions
+                    possible_action = MoveAction(frog_coord, direction)
+                    possible_actions.append(possible_action)
+
+        possible_actions.append(GrowAction())
+
+        return possible_actions
+
         
     # TODO: run minimax algorithm to determine the best action
     def action(self, **referee: dict) -> Action:
@@ -75,7 +120,6 @@ class MiniMaxAgent:
         This method is called by the referee each time it is the agent's turn
         to take an action. It must always return an action object. 
         """
-        possible_actions = [GrowAction()]
 
         # TODO: initialize num_node to cut off the tree
         # if self._is_maximizer:
@@ -86,36 +130,22 @@ class MiniMaxAgent:
         LEGAL_DIRECTION = [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
 
         # generate actions for all frogs
-        if self._is_maximizer:
-            for direction in LEGAL_DIRECTION:
-                for red_coord in self._internal_state._red_frogs:
-                    # convert it into action and find multiple hops
-                        try: 
-                            new_coord = red_coord + direction
-                        except ValueError as e:
-                            return None
-                        
-                        if (self._internal_state._board._within_bounds(new_coord) and
-                                     self._internal_state._board._state[new_coord] == PlayerColor.BLUE): # Valid jump
-                            try:
-                                new_coord = new_coord + direction                                    
-                            except ValueError:
-                                return None  # Invalid jump move
-                            
-                        if (self._internal_state._board._state[new_coord] == "LilyPad"): # Valid lily pad
-                            
-                            # add them to possible_actions
-                            possible_action = MoveAction(red_coord, direction)
-                            possible_actions.append(possible_action)
-        
+        possible_actions = self.generate_actions(self._internal_state, self._color)
+
+        print(f"Possible actions: {possible_actions}")
+
         value = {}
         
         # for each action in possible_actions
         for action in possible_actions:
             # board apply_action(action)
+            print(action)
             self._internal_state._board.apply_action(action)
+            new_state = State(self._internal_state._board)
+
             # call minimax on the new board state and record the value for each action
-            value[action] = self._minimax(self._internal_state._board)
+            value[action] = self._minimax(new_state)
+
             # undo the action
             self._internal_state._board.undo_action()
 
@@ -134,53 +164,33 @@ class MiniMaxAgent:
         return best_action
 
     # TOdo: Implement a recursive minimax algorithm to evaluate the game state
-    def _minimax(self, board: Board, iter: int = 0)-> float:
+    def _minimax(self, state: State, iter: int = 0)-> float:
         """
         Returns the minimax value of the current board state.
         """
 
         # if the game is over or the depth limit is reached, return the heuristic value
-        if board.game_over or iter >= 3:
-            return self._evaluate()
+        if state._board.game_over or iter >= 3:
+            return self._evaluate(state)
 
         # if self._is_maximizer:
-        if board._turn_color == PlayerColor.RED:
+        if state._board._turn_color == PlayerColor.RED:
             # set highest value
             highest = -math.inf
-
-            LEGAL_DIRECTION = [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
-            possible_actions = [GrowAction()]
-
-            for direction in LEGAL_DIRECTION:
-                for red_coord in self._internal_state._red_frogs:
-                    # convert it into action and find multiple hops
-                        try: 
-                            new_coord = red_coord + direction
-                        except ValueError as e:
-                            return None
-                        
-                        if (self._internal_state._board._within_bounds(new_coord) and
-                                     self._internal_state._board._state[new_coord] == PlayerColor.BLUE): # Valid jump
-                            try:
-                                new_coord = new_coord + direction                                    
-                            except ValueError:
-                                return None  # Invalid jump move
-                            
-                        if (self._internal_state._board._state[new_coord] == "LilyPad"): # Valid lily pad
-                            
-                            # add them to possible_actions
-                            possible_action = MoveAction(red_coord, direction)
-                            possible_actions.append(possible_action)            
-            
+            possible_actions = self.generate_actions(state, PlayerColor.RED)        
+            print(possible_actions) 
             
             # apply each action to the board
             for action in possible_actions:
-                self._internal_state._board.apply_action(action)
+                state._board.apply_action(action)
+                new_state = State(state._board)
+
                 # call minimax on the new board state and record the value for each action
                 iter += 1
-                value = self._minimax(self._internal_state._board, iter)
+                value = self._minimax(new_state, iter)
+
                 # undo the action
-                self._internal_state._board.undo_action()
+                state._board.undo_action()
                 highest = max(highest, value)
 
             # return highest value
@@ -188,45 +198,27 @@ class MiniMaxAgent:
 
         # else:
         else:
-            LEGAL_DIRECTION = [Direction.Up, Direction.Right, Direction.Left, Direction.UpLeft, Direction.UpRight]
-            lowest = math.inf
-            possible_actions = [GrowAction()]
-
-            for direction in LEGAL_DIRECTION:
-                for blue_coord in self._internal_state._blue_frogs:
-                    # convert it into action and find multiple hops
-                        try: 
-                            new_coord = blue_coord + direction
-                        except ValueError as e:
-                            return None
-                        
-                        if (self._internal_state._board._within_bounds(new_coord) and
-                                     self._internal_state._board._state[new_coord] == PlayerColor.RED): # Valid jump
-                            try:
-                                new_coord = new_coord + direction                                    
-                            except ValueError:
-                                return None  # Invalid jump move
-                            
-                        if (self._internal_state._board._state[new_coord] == "LilyPad"): # Valid lily pad
-                            
-                            # add them to possible_actions
-                            possible_action = MoveAction(blue_coord, direction)
-                            possible_actions.append(possible_action)
-                            
             # set lowest value
+            lowest = math.inf
+            possible_actions = self.generate_actions(state, PlayerColor.BLUE)   
+
+            
             for action in possible_actions:
-                self._internal_state._board.apply_action(action)
+                state._board.apply_action(action)
+                new_state = State(state._board)
+                
                 # call minimax on the new board state and record the value for each action
                 iter += 1
-                value = self._minimax(self._internal_state._board, iter)
+                value = self._minimax(new_state, iter)
+
                 # undo the action
-                self._internal_state._board.undo_action()
+                state._board.undo_action()
                 lowest = min(lowest, value)
 
             # return highest value
             return lowest
         
-    def _evaluate(self) -> float:
+    def _evaluate(self, state: State) -> float:
         """
         Returns the heuristic value of the current board state.
         A higher value favors the maximizer (RED), and a lower value favors the minimizer (BLUE).
@@ -235,24 +227,22 @@ class MiniMaxAgent:
         blue_score = 0
 
         # Reward RED frogs for being on their target lilypads
-        for red_frog in self._internal_state._red_frogs:
-            if red_frog in self._internal_state._red_target_lilypads:
-                red_score += 10  # High reward for reaching the target
-            else:
-                # Penalize based on distance to the nearest target lilypad
-                distances = [abs(red_frog.r - target.r) + abs(red_frog.c - target.c)
-                            for target in self._internal_state._red_target_lilypads]
-                red_score -= min(distances) if distances else 0
+        _red_target_lilypads = [Coord(r=7, c=c) for c in range(BOARD_N)]
+
+        for red_frog in state._red_frogs:
+            distances = [abs(red_frog.r - target.r) + abs(red_frog.c - target.c)
+                    for target in _red_target_lilypads]
+            
+            red_score = -sum(distances)
 
         # Reward BLUE frogs for being on their target lilypads
-        for blue_frog in self._internal_state._blue_frogs:
-            if blue_frog in self._internal_state._blue_target_lilypads:
-                blue_score += 10  # High reward for reaching the target
-            else:
-                # Penalize based on distance to the nearest target lilypad
-                distances = [abs(blue_frog.r - target.r) + abs(blue_frog.c - target.c)
-                            for target in self._internal_state._blue_target_lilypads]
-                blue_score -= min(distances) if distances else 0
+        _blue_target_lilypads = [Coord(r=0, c=c) for c in range(BOARD_N)]
+
+        for blue_frog in state._blue_frogs:
+            distances = [abs(blue_frog.r - target.r) + abs(blue_frog.c - target.c)
+                        for target in _blue_target_lilypads]
+            
+            blue_score = - sum(distances)
 
         # Return the difference in scores (favoring RED if positive, BLUE if negative)
         return red_score - blue_score
