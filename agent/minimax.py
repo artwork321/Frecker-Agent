@@ -8,226 +8,196 @@ import math
 
 class State:
     """
-    This class represents the state of the game. It contains information about
-    the current board, the players, and any other relevant game data.
+    Represents the state of the game, including the board and the positions
+    of the frogs for both players.
     """
 
     def __init__(self, board: Board = None):
+        """
+        Initializes the game state.
 
-        if board is None:
-            self._board = Board()   
-        else:
-           self._board = board
-
+        Args:
+            board (Board, optional): The game board. If None, a new board is created.
+        """
+        self._board = board if board else Board()
         self._blue_frogs = []
         self._red_frogs = []
+        self._update_frog_positions()
 
-        for coord in self._board._state:
-            cell_state = self._board.__getitem__(coord)
-
-            if cell_state.state == PlayerColor.BLUE:
-                self._blue_frogs.append(coord)
-            elif cell_state.state == PlayerColor.RED:
-                self._red_frogs.append(coord)
-
-        # print(self._board.render())
-
-
-    def update_state(self, action: Action):
+    def _update_frog_positions(self):
         """
-        Update the internal state of the game based on the action taken.
+        Updates the lists of blue and red frogs based on the current board state.
         """
-        self._board.apply_action(action)
-
-        # Update the lists of blue and red pieces and lily pads      
         self._blue_frogs.clear()
         self._red_frogs.clear()
 
         for coord in self._board._state:
             cell_state = self._board.__getitem__(coord)
-
             if cell_state.state == PlayerColor.BLUE:
                 self._blue_frogs.append(coord)
             elif cell_state.state == PlayerColor.RED:
                 self._red_frogs.append(coord)
 
+    def update_state(self, action: Action):
+        """
+        Updates the internal state of the game based on the action taken.
+
+        Args:
+            action (Action): The action to apply to the board.
+        """
+        board_mutations = self._board.apply_action(action)
+
+        # for cell_mutation in board_mutations.cell_mutations:
+
+        #     # Remove the frog from the list of frogs
+        #     if cell_mutation.prev.state == PlayerColor.BLUE:
+        #         self._blue_frogs.remove(cell_mutation.coord)
+        #     elif cell_mutation.prev.state == PlayerColor.RED:
+        #         self._red_frogs.remove(cell_mutation.coord)
+            
+        #     # update new frog position
+        #     if cell_mutation.next.state == PlayerColor.BLUE:
+        #         self._blue_frogs.append(cell_mutation.coord)
+        #     elif cell_mutation.next.state == PlayerColor.RED:       
+        #         self._red_frogs.append(cell_mutation.coord)
+        self._update_frog_positions()
+
 
 class MiniMaxAgent:
     """
-    This class is the "entry point" for your agent, providing an interface to
-    respond to various Freckers game events.
+    This class implements a game-playing agent using the Minimax algorithm.
     """
 
     def __init__(self, color: PlayerColor, **referee: dict):
         """
-        This constructor method runs when the referee instantiates the agent.
-        Any setup and/or precomputation should be done here.
+        Initializes the agent with the given player color.
+
+        Args:
+            color (PlayerColor): The color of the player (RED or BLUE).
+            **referee (dict): Additional referee data.
         """
         self._color = color
         self._internal_state = State()
         self._is_maximizer = self._color == PlayerColor.RED
 
-        match color:
-            case PlayerColor.RED:
-                print("Testing: I am playing as RED")
-            case PlayerColor.BLUE:
-                print("Testing: I am playing as BLUE")
+        print(f"Testing: I am playing as {'RED' if self._is_maximizer else 'BLUE'}")
 
     def generate_actions(self, state: State) -> list[Action]:
         """
-        Generate all possible actions for the given color.
+        Generate all possible actions for the current player.
+
+        Args:
+            state (State): The current game state.
+
+        Returns:
+            list[Action]: A list of possible actions.
         """
         possible_actions = []
-
         color = state._board._turn_color
-        
+
         if color == PlayerColor.RED:
-            LEGAL_DIRECTION = [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
+            legal_directions = [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
             frogs_coord = state._red_frogs
         else:
-            LEGAL_DIRECTION = [Direction.Up, Direction.Right, Direction.Left, Direction.UpLeft, Direction.UpRight]
+            legal_directions = [Direction.Up, Direction.Right, Direction.Left, Direction.UpLeft, Direction.UpRight]
             frogs_coord = state._blue_frogs
 
-        for direction in LEGAL_DIRECTION:
-            for frog_coord in frogs_coord:
-                # convert it into action and find multiple hops
-
-                try: 
+        for frog_coord in frogs_coord:
+            for direction in legal_directions:
+                try:
                     new_coord = frog_coord + direction
-                except ValueError as e:
+                    if state._board._within_bounds(new_coord) and state._board.__getitem__(new_coord).state in [PlayerColor.BLUE, PlayerColor.RED]:
+                        new_coord += direction  # Attempt a jump
+                    if state._board.__getitem__(new_coord).state == "LilyPad":
+                        possible_actions.append(MoveAction(frog_coord, direction))
+                except ValueError:
                     continue
-                
-                if (state._board._within_bounds(new_coord) and
-                                (state._board.__getitem__(new_coord).state == PlayerColor.BLUE
-                                or state._board.__getitem__(new_coord).state == PlayerColor.RED)): # Valid jump
-                    try:
-                        new_coord = new_coord + direction                                    
-                    except ValueError:
-                        continue  # Invalid jump move
-                
-                if (state._board.__getitem__(new_coord).state == "LilyPad"): # Valid lily pad
-                    
-                    # add them to possible_actions
-                    possible_action = MoveAction(frog_coord, direction)
-                    possible_actions.append(possible_action)
 
         possible_actions.append(GrowAction())
-
         return possible_actions
 
-        
-    # TODO: run minimax algorithm to determine the best action
     def action(self, **referee: dict) -> Action:
         """
-        This method is called by the referee each time it is the agent's turn
-        to take an action. It must always return an action object. 
+        Determines the best action to take using the Minimax algorithm.
+
+        Args:
+            **referee (dict): Additional referee data.
+
+        Returns:
+            Action: The best action determined by the Minimax algorithm.
         """
-
-        # generate actions for all frogs
         possible_actions = self.generate_actions(self._internal_state)
-        # print(f"Possible actions: {possible_actions}")
+        action_values = {}
 
-        value = {}
-        
-        # apply each action until having to stop
         for action in possible_actions:
             self._internal_state._board.apply_action(action)
-        
-            # create a new state for the action and run minimax
             new_state = State(self._internal_state._board)
-            value[action] = self._minimax(new_state)
+            action_values[action] = self._minimax(new_state)
             self._internal_state._board.undo_action()
 
-            # print(f"Try action: {action}")
-            # print(f"Value: {value[action]}")
+        return max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
 
-
-        if self._is_maximizer:
-            best_action = max(value, key=value.get)
-        else:
-            best_action = min(value, key=value.get)
-
-        return best_action
-
-    # TOdo: Implement a recursive minimax algorithm to evaluate the game state
-    def _minimax(self, state: State, iter: int = 0)-> float:
+    def _minimax(self, state: State, depth: int = 0) -> float:
         """
-        Returns the minimax value of the given state.
-        """
+        Recursively calculates the minimax value of the given state.
 
-        # if the game is over or the depth limit is reached, return the heuristic value
-        iter += 1
-        
-        if state._board.game_over or iter >= 3:
+        Args:
+            state (State): The current game state.
+            depth (int): The current depth of recursion.
+
+        Returns:
+            float: The minimax value of the state.
+        """
+        depth += 1
+
+        # Base case: game over or depth limit reached
+        if state._board.game_over or depth >= 3:
             return self._evaluate(state)
-        
-        if state._board._turn_color == PlayerColor.RED:
-            highest = -math.inf
-            possible_actions = self.generate_actions(state)        
-            
-            for action in possible_actions:
-                state._board.apply_action(action)
 
-                new_state = State(state._board)
-                value = self._minimax(new_state, iter)
-                state._board.undo_action()
+        is_maximizing = state._board._turn_color == PlayerColor.RED
+        best_value = -math.inf if is_maximizing else math.inf
 
-                highest = max(highest, value)
+        for action in self.generate_actions(state):
+            state._board.apply_action(action)
+            new_state = State(state._board)
+            value = self._minimax(new_state, depth)
+            state._board.undo_action()
 
-            return highest
-        
-        else:
-            lowest = math.inf
-            possible_actions = self.generate_actions(state)   
+            if is_maximizing:
+                best_value = max(best_value, value)
+            else:
+                best_value = min(best_value, value)
 
-            for action in possible_actions:
-                state._board.apply_action(action)
+        return best_value
 
-                new_state = State(state._board)
-                value = self._minimax(new_state, iter)
-                state._board.undo_action()
-
-                lowest = min(lowest, value)
-
-            return lowest
-        
     def _evaluate(self, state: State) -> float:
         """
-        Returns the heuristic value of the current board state.
-        A higher value favors the maximizer (RED), and a lower value favors the minimizer (BLUE).
+        Heuristic evaluation of the current board state.
+
+        Args:
+            state (State): The current game state.
+
+        Returns:
+            float: The heuristic value of the state.
         """
-        red_score = 0
-        blue_score = 0
+        def calculate_score(frogs: list[Coord], target_lilypads: list[Coord]) -> int:
+            return -sum(
+                min(abs(frog.r - target.r) + abs(frog.c - target.c) for target in target_lilypads)
+                for frog in frogs
+            )
 
-        # Reward RED frogs for being on their target lilypads
-        _red_target_lilypads = [Coord(r=7, c=c) for c in range(BOARD_N)]
+        red_score = calculate_score(state._red_frogs, [Coord(r=7, c=c) for c in range(BOARD_N)])
+        blue_score = calculate_score(state._blue_frogs, [Coord(r=0, c=c) for c in range(BOARD_N)])
 
-        for red_frog in state._red_frogs:
-            distances = [abs(red_frog.r - target.r) + abs(red_frog.c - target.c)
-                    for target in _red_target_lilypads]
-            
-            red_score = -sum(distances)
-
-        # Reward BLUE frogs for being on their target lilypads
-        _blue_target_lilypads = [Coord(r=0, c=c) for c in range(BOARD_N)]
-
-        for blue_frog in state._blue_frogs:
-            distances = [abs(blue_frog.r - target.r) + abs(blue_frog.c - target.c)
-                        for target in _blue_target_lilypads]
-            
-            blue_score = - sum(distances)
-
-        # Return the difference in scores (favoring RED if positive, BLUE if negative)
         return red_score - blue_score
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         """
-        This method is called by the referee after a player has taken their
-        turn. You should use it to update the agent's internal game state. 
-        """
+        Updates the agent's internal game state after a player takes their turn.
 
-        # There are two possible action types: MOVE and GROW. Below we check
-        # which type of action was played and print out the details of the
-        # action for demonstration purposes. You should replace this with your
-        # own logic to update your agent's internal game state representation.
+        Args:
+            color (PlayerColor): The color of the player who took the action.
+            action (Action): The action taken by the player.
+            **referee (dict): Additional referee data.
+        """
         self._internal_state.update_state(action)
