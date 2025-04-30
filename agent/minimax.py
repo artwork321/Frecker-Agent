@@ -89,6 +89,7 @@ class MiniMaxAgent:
         self._color = color
         self._internal_state = State()
         self._is_maximizer = self._color == PlayerColor.RED
+        self._num_nodes = 0
 
         print(f"Testing: I am playing as {'RED' if self._is_maximizer else 'BLUE'}")
 
@@ -145,12 +146,13 @@ class MiniMaxAgent:
         for action in possible_actions:
             self._internal_state._board.apply_action(action)
             new_state = State(self._internal_state._board)
-            action_values[action] = self._minimax(new_state)
+            self._num_nodes += 1
+            action_values[action] = self._minimax(new_state, is_pruning=PRUNING)
             self._internal_state._board.undo_action()
 
         return max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
 
-    def _minimax(self, state: State, depth: int = 0, alpha = -math.inf, beta = math.inf) -> float:
+    def _minimax(self, state: State, depth: int = 0, alpha = -math.inf, beta = math.inf, is_pruning=True) -> float:
         """
         Recursively calculates the minimax value of the given state using Alpha-Beta Pruning.
 
@@ -177,13 +179,14 @@ class MiniMaxAgent:
             for action in self.generate_actions(state):
                 state._board.apply_action(action)
                 new_state = State(state._board)
-                eval = self._minimax(new_state, depth, alpha, beta)
+                self._num_nodes += 1
+                eval = self._minimax(new_state, depth, alpha, beta, is_pruning)
                 state._board.undo_action()
 
                 max_eval = max(max_eval, eval)
                 alpha = max(alpha, eval)
 
-                if beta <= alpha:
+                if is_pruning and beta <= max_eval:
                     break
 
             return max_eval
@@ -192,19 +195,81 @@ class MiniMaxAgent:
             for action in self.generate_actions(state):
                 state._board.apply_action(action)
                 new_state = State(state._board)
-                eval = self._minimax(new_state, depth, alpha, beta)
+                self._num_nodes += 1
+                eval = self._minimax(new_state, depth, alpha, beta, is_pruning)
                 state._board.undo_action()
 
                 min_eval = min(min_eval, eval)
                 beta = min(beta, eval)
 
                 # Prune the branch
-                if beta <= alpha:
+                if is_pruning and min_eval <= alpha:
                     break
 
             return min_eval
-
+            
     def _evaluate(self, state: State) -> float:
+        """
+        Heuristic evaluation of the current board state.
+
+        Strategy: Linear weighted sum of features.
+        Features:
+            1. Number of frogs on the target lily pads.
+            2. Number of frogs adjacent to another frog (weighted by whose turn it is).
+            3. Negative sum of the distance of the frogs to the nearest target lily pads.
+
+        Args:
+            state (State): The current game state.
+
+        Returns:
+            float: The heuristic value of the state.
+        """
+        def get_est_distance(target: Coord, curr_frog: Coord) -> int:
+            """
+            Estimate the distance between a frog and a target lily pad.
+            """
+            verti_dist = abs(target.r - curr_frog.r)
+            horiz_dist = abs(target.c - curr_frog.c)
+            n_diag_moves = min(verti_dist, horiz_dist)
+            return verti_dist + horiz_dist - n_diag_moves
+
+        # Determine the current player's color
+        color = state._board._turn_color
+
+        # Feature 1: Number of frogs on the target lily pads
+        finished_red = [frog for frog in state._red_frogs if frog.r == 7]
+        finished_blue = [frog for frog in state._blue_frogs if frog.r == 0]
+        num_finished_red = len(finished_red)
+        num_finished_blue = len(finished_blue)
+
+        # Feature 2: Number of frogs adjacent to another frog (weighted by whose turn it is)
+        num_adjacent_frog = 0
+        remaining_red = [frog for frog in state._red_frogs if frog not in finished_red]
+        remaining_blue = [frog for frog in state._blue_frogs if frog not in finished_blue]
+
+        for red in remaining_red:
+            for blue in remaining_blue:
+                if blue.r >= red.r and blue.r-red.r == 1 and abs(blue.c-red.c) <= 1:
+                    num_adjacent_frog += 1
+
+
+        # Feature 3: Negative sum of the distance of the frogs to the nearest target lily pads
+        total_dis_red = sum(get_est_distance(Coord(r=7, c=frog.c), frog) for frog in state._red_frogs)
+        total_dis_blue = sum(get_est_distance(Coord(r=0, c=frog.c), frog) for frog in state._blue_frogs)
+
+        # Calculate scores for RED and BLUE
+        weights = [10, 5, -1]
+        red_score = weights[0] * num_finished_red + weights[1]*num_adjacent_frog * (1 if color == PlayerColor.RED else -1) + weights[2]*total_dis_red
+        blue_score = weights[0] * num_finished_blue + weights[1]*num_adjacent_frog * (-1 if color == PlayerColor.RED else 1) + weights[2]*total_dis_blue
+
+        # Debugging output
+        # print(f"Red Score: {red_score}, Blue Score: {blue_score}")
+
+        # Return the difference in scores (higher is better for RED)
+        return red_score - blue_score
+
+
+    def _naive_evaluate(self, state: State) -> float:
         """
         Heuristic evaluation of the current board state.
 
@@ -215,12 +280,6 @@ class MiniMaxAgent:
             float: The heuristic value of the state.
         """
 
-        # strategy: linear weighted sum features
-        # not terrible function: correctly give more scores for winning state
-        # feature 1: number of frogs on the target lily pads. 
-        # feature 2: number of frogs next to another frog * whose_turn.
-        # feature 3: penalize the furthest frog from the target lilypads
-        # feature 4: negative sum of the distance of the frogs to the nearest target lilypads -- current
         def get_est_distance(target: Coord, curr_frog: Coord) -> int:
             verti_dist = abs(target.r - curr_frog.r)
             horiz_dist = abs(target.c - curr_frog.c)
@@ -241,7 +300,7 @@ class MiniMaxAgent:
         red_score = calculate_score(state._red_frogs, [Coord(r=7, c=c) for c in range(BOARD_N)])
         blue_score = calculate_score(state._blue_frogs, [Coord(r=0, c=c) for c in range(BOARD_N)])
 
-        print(red_score, blue_score)
+        # print(red_score, blue_score)
 
         return red_score - blue_score
 
@@ -254,4 +313,5 @@ class MiniMaxAgent:
             action (Action): The action taken by the player.
             **referee (dict): Additional referee data.
         """
+        print(self._num_nodes)
         self._internal_state.update_state(action)
