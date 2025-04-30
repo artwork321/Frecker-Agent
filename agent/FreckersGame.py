@@ -7,6 +7,17 @@ import numpy as np
 N_FROGS = 6
 
 class FreckersGame():
+    __direction_ids = {(1, 0): 0, # down
+                    (1, -1): 1, # downleft
+                    (1, 1): 2, # downright
+                    (0, -1): 3, # left
+                    (0, 1): 4, # right
+                    (2, 0): 0, # down jump
+                    (2, -2): 1, # downleft jump
+                    (2, 2): 2, # downright jump
+                    (0, -2): 3, # left jump
+                    (0, 2): 4} # right jump
+
     square_content = {
         -2: "B",
         +0: "-",
@@ -31,9 +42,9 @@ class FreckersGame():
         return (self.n, self.n)
 
     def getActionSize(self):
-        # return number of actions TODO
-        return N_FROGS*self.n*self.n + 1
-        # #frogs * #possible positions for a frog + #addtional actions (grow)
+        # return number of actions
+        return self.n*self.n*5 + 1
+        # #start_squares * #possible_directions (move) + #addtional_actions (grow)
 
     def getNextState(self, board, player, action):
         # if player takes action on board, return next (board,player)
@@ -51,30 +62,34 @@ class FreckersGame():
         valids = [0]*self.getActionSize()
         b = Board(self.n)
         b.pieces = np.copy(board)
-        legalMoves =  b.get_legal_moves(player)
-        if len(legalMoves)==0:
+
+        if b.has_legal_grow(player):
             valids[-1]=1
-            return np.array(valids)
-        for x, y in legalMoves:
-            valids[self.n*x+y]=1
+
+        legalMoves =  b.get_legal_moves(player) 
+        for (origin, directions, _) in legalMoves:
+            x, y = origin
+            direction_idx = self.__direction_ids[directions[0]]
+            valids[self.n*x + y + direction_idx] = 1
+
         return np.array(valids)
 
     def getGameEnded(self, board, player):
-        # return 0 if not ended, 1 if player 1 won, -1 if player 1 lost
-        # player = 1
+        # return 0 if not ended, 1 if player 2 won, -1 if player 2 lost
+        # player = 2
         b = Board(self.n)
         b.pieces = np.copy(board)
-        if b.has_legal_moves(player):
-            return 0
-        if b.has_legal_moves(-player):
-            return 0
-        if b.countDiff(player) > 0:
+        if b.count_players_at_goal(player) == N_FROGS:
             return 1
-        return -1
+        if b.count_players_at_goal(-player) == N_FROGS:
+            return -1
+        return 0
 
     def getCanonicalForm(self, board, player):
-        # return state if player==1, else return -state if player==-1
-        return player*board
+        # return state if player==2, else return -state if player==-2
+        if player < 0:
+            return board.switch_perspectives()
+        return board
 
     def getSymmetries(self, board, pi):
         # mirror, rotational
