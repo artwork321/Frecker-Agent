@@ -22,9 +22,9 @@ class State:
         self._board = board if board else Board()
         self._blue_frogs = []
         self._red_frogs = []
-        self._update_frog_positions()
+        self._init_frog_positions()
 
-    def _update_frog_positions(self):
+    def _init_frog_positions(self):
         """
         Updates the lists of blue and red frogs based on the current board state.
         """
@@ -47,20 +47,30 @@ class State:
         """
         board_mutations = self._board.apply_action(action)
 
-        # for cell_mutation in board_mutations.cell_mutations:
+        for cell_mutation in board_mutations.cell_mutations:
+            # Update frog positions based on the mutation
+            self._update_frog_list(self._blue_frogs, cell_mutation, PlayerColor.BLUE)
+            self._update_frog_list(self._red_frogs, cell_mutation, PlayerColor.RED)
 
-        #     # Remove the frog from the list of frogs
-        #     if cell_mutation.prev.state == PlayerColor.BLUE:
-        #         self._blue_frogs.remove(cell_mutation.coord)
-        #     elif cell_mutation.prev.state == PlayerColor.RED:
-        #         self._red_frogs.remove(cell_mutation.coord)
-            
-        #     # update new frog position
-        #     if cell_mutation.next.state == PlayerColor.BLUE:
-        #         self._blue_frogs.append(cell_mutation.coord)
-        #     elif cell_mutation.next.state == PlayerColor.RED:       
-        #         self._red_frogs.append(cell_mutation.coord)
-        self._update_frog_positions()
+        # print(f"Blue frogs: {self._blue_frogs}")
+        # print(f"Red frogs: {self._red_frogs}")
+    
+    def _update_frog_list(self, frog_list: list[Coord], cell_mutation, color: PlayerColor):
+        """
+        Updates the frog list for a given color based on a cell mutation.
+
+        Args:
+            frog_list (list[Coord]): The list of frog positions to update.
+            cell_mutation: The mutation of the cell state.
+            color (PlayerColor): The color of the frogs to update.
+        """
+        # Remove the previous position if it matches the color
+        if cell_mutation.prev.state == color:
+            frog_list.remove(cell_mutation.cell)
+
+        # Add the new position if it matches the color
+        if cell_mutation.next.state == color:
+            frog_list.append(cell_mutation.cell)
 
 
 class MiniMaxAgent:
@@ -110,6 +120,9 @@ class MiniMaxAgent:
                         new_coord += direction  # Attempt a jump
                     if state._board.__getitem__(new_coord).state == "LilyPad":
                         possible_actions.append(MoveAction(frog_coord, direction))
+
+                        #TODO: attemp to jump again to generate multiple jump move
+
                 except ValueError:
                     continue
 
@@ -137,38 +150,59 @@ class MiniMaxAgent:
 
         return max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
 
-    def _minimax(self, state: State, depth: int = 0) -> float:
+    def _minimax(self, state: State, depth: int = 0, alpha = -math.inf, beta = math.inf) -> float:
         """
-        Recursively calculates the minimax value of the given state.
+        Recursively calculates the minimax value of the given state using Alpha-Beta Pruning.
 
         Args:
             state (State): The current game state.
             depth (int): The current depth of recursion.
+            alpha (float): The best value that the maximizer from path to state
+            beta (float): The best value that the minimizer from path to state
 
         Returns:
             float: The minimax value of the state.
         """
         depth += 1
+        # print(alpha, beta)
 
         # Base case: game over or depth limit reached
-        if state._board.game_over or depth >= 3:
+        if state._board.game_over or depth >= DEPTH_LIMIT:
             return self._evaluate(state)
 
         is_maximizing = state._board._turn_color == PlayerColor.RED
-        best_value = -math.inf if is_maximizing else math.inf
 
-        for action in self.generate_actions(state):
-            state._board.apply_action(action)
-            new_state = State(state._board)
-            value = self._minimax(new_state, depth)
-            state._board.undo_action()
+        if is_maximizing:
+            max_eval = -math.inf
+            for action in self.generate_actions(state):
+                state._board.apply_action(action)
+                new_state = State(state._board)
+                eval = self._minimax(new_state, depth, alpha, beta)
+                state._board.undo_action()
 
-            if is_maximizing:
-                best_value = max(best_value, value)
-            else:
-                best_value = min(best_value, value)
+                max_eval = max(max_eval, eval)
+                alpha = max(alpha, eval)
 
-        return best_value
+                if beta <= alpha:
+                    break
+
+            return max_eval
+        else:
+            min_eval = math.inf
+            for action in self.generate_actions(state):
+                state._board.apply_action(action)
+                new_state = State(state._board)
+                eval = self._minimax(new_state, depth, alpha, beta)
+                state._board.undo_action()
+
+                min_eval = min(min_eval, eval)
+                beta = min(beta, eval)
+
+                # Prune the branch
+                if beta <= alpha:
+                    break
+
+            return min_eval
 
     def _evaluate(self, state: State) -> float:
         """
@@ -180,14 +214,34 @@ class MiniMaxAgent:
         Returns:
             float: The heuristic value of the state.
         """
+
+        # strategy: linear weighted sum features
+        # not terrible function: correctly give more scores for winning state
+        # feature 1: number of frogs on the target lily pads. 
+        # feature 2: number of frogs next to another frog * whose_turn.
+        # feature 3: penalize the furthest frog from the target lilypads
+        # feature 4: negative sum of the distance of the frogs to the nearest target lilypads -- current
+        def get_est_distance(target: Coord, curr_frog: Coord) -> int:
+            verti_dist = abs(target.r - curr_frog.r)
+            horiz_dist = abs(target.c - curr_frog.c)
+            n_diag_moves = min(verti_dist, horiz_dist)
+
+            return verti_dist + horiz_dist - n_diag_moves
+    
         def calculate_score(frogs: list[Coord], target_lilypads: list[Coord]) -> int:
-            return -sum(
-                min(abs(frog.r - target.r) + abs(frog.c - target.c) for target in target_lilypads)
-                for frog in frogs
-            )
+            distances = []
+
+            for frog in frogs:
+                scores = min([get_est_distance(target, frog) for target in target_lilypads])
+                distances.append(scores)
+
+            
+            return -sum(distances)
 
         red_score = calculate_score(state._red_frogs, [Coord(r=7, c=c) for c in range(BOARD_N)])
         blue_score = calculate_score(state._blue_frogs, [Coord(r=0, c=c) for c in range(BOARD_N)])
+
+        print(red_score, blue_score)
 
         return red_score - blue_score
 
