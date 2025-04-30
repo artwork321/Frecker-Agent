@@ -5,6 +5,7 @@ from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction, Board
 from referee.game.constants import *    
 import math
+PRUNING = True
 
 class State:
     """
