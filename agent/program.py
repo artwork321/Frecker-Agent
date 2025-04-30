@@ -5,7 +5,10 @@ from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction, Board
 from referee.game.constants import *    
 import math
+
+DEPTH_LIMIT     = 3
 PRUNING = True
+
 
 class State:
     """
