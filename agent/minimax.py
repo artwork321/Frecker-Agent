@@ -49,6 +49,7 @@ class MiniMaxAgent:
         
         return action
 
+
     def _minimax(self, state: BoardState, depth: int = 0, alpha = -math.inf, beta = math.inf, is_pruning=True) -> float:
         """
         Recursively calculates the minimax value of the given state using Alpha-Beta Pruning.
@@ -154,39 +155,6 @@ class MiniMaxAgent:
                             penalty -= 0.5
             return penalty
 
-        def calculate_mobility(state: BoardState, color: PlayerColor) -> int:
-            """
-            Calculate the number of possible moves for a given player.
-            """
-            mobility = 0
-            frogs = state._red_frogs if color == PlayerColor.RED else state._blue_frogs
-
-            for frog in frogs:
-                for direction in Direction:
-                    try:
-                        dest_coord = frog + direction
-                        jump_coord = dest_coord + direction
-
-                        if dest_coord in state._lily_pads or jump_coord in state._lily_pads:
-                            mobility += 1
-                    except ValueError:
-                        pass
-
-            return mobility
-
-        def calculate_central_control(color: PlayerColor) -> int:
-            """
-            Calculate the number of frogs in the central 4x4 area.
-            """
-            center_area = [Coord(r, c) for r in range(3, 5) for c in range(3, 5)]
-
-            if color == PlayerColor.RED:
-                frogs = state._red_frogs
-            else:
-                frogs = state._blue_frogs
-
-            return sum(1 for frog in frogs if frog in center_area)
-
         # Determine the current player's color
         color = state._turn_color
 
@@ -207,19 +175,9 @@ class MiniMaxAgent:
         total_dis_blue = sum(get_est_distance(Coord(r=0, c=frog.c), frog) for frog in state._blue_frogs)
         total_dis_diff = total_dis_red - total_dis_blue
 
-        # Feature 4: Move count (mobility)
-        red_move = calculate_mobility(state, PlayerColor.RED)
-        blue_move = calculate_mobility(state, PlayerColor.BLUE)
-        mobility_diff = red_move - blue_move
-
-        # Feature 5: Central Control
-        red_central_control = calculate_central_control(PlayerColor.RED)
-        blue_central_control = calculate_central_control(PlayerColor.BLUE)
-        central_control_diff = red_central_control - blue_central_control
-
         # Calculate scores for RED and BLUE
-        weights = [5, 1, -1, 1, 1]  # Weights for each feature
-        diff_score = [finished_diff, vulnerable_diff, total_dis_diff, mobility_diff, central_control_diff]
+        weights = [5, 1, -5]  # Weights for each feature
+        diff_score = [finished_diff, vulnerable_diff, total_dis_diff]
         score = sum(w * s for w, s in zip(weights, diff_score))
 
         return score
@@ -231,10 +189,6 @@ class MiniMaxAgent:
         """
         print(self._num_nodes)
         self._internal_state = self._internal_state.apply_action(color, action)
-
-        # if (isinstance(action, MoveAction) and len(action.directions) > 1):
-        #     print("Move from", action.coord, "to", action.coord + action.directions[-1], "with directions", action.directions)
-        
         # print(self._internal_state._red_frogs)
         # print(self._internal_state._blue_frogs)
         # print(self._internal_state._lily_pads)

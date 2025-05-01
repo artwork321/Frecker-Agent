@@ -156,6 +156,26 @@ class BoardState:
             if cell not in self._blue_frogs and cell not in self._red_frogs and cell not in self._lily_pads:
                 self._lily_pads.add(cell)
     
+    def _resolve_destination(self, curr_coord: Coord, direction: Direction) -> Coord:
+        try:
+            is_jump = False
+            new_coord = curr_coord + direction
+
+            if new_coord in self._blue_frogs or new_coord in self._red_frogs:
+                try: 
+                    new_coord += direction  # Attempt a jump
+                    is_jump = True
+                except ValueError:
+                    pass
+                    
+            if new_coord in self._lily_pads:
+                return new_coord, is_jump
+            else:
+                return None, False
+
+        except ValueError:
+            return None, False # no valid destination
+        
 
     def generate_actions(self) -> list[Action]:
         """
@@ -167,85 +187,60 @@ class BoardState:
 
         for frog_coord in frogs_coord:
             for direction in legal_directions:
-                try:
-                    is_jump = False
-                    new_coord = frog_coord + direction
-                    if self._within_bounds(new_coord) and (new_coord in self._blue_frogs or new_coord in self._red_frogs):
-                        new_coord += direction  # Attempt a jump
-                        is_jump = True
+                new_coord, is_jump = self._resolve_destination(frog_coord, direction)
 
-                    if new_coord in self._lily_pads:
-                        possible_actions.append(MoveAction(frog_coord, direction))
+                if new_coord is not None:
+                    possible_actions.append(MoveAction(frog_coord, direction))
 
-                        if is_jump:
-                            possible_jumps = self.discover_jumps(MoveAction(frog_coord, direction), new_coord)
-                            # print("possible_jumps", possible_jumps)
-                            possible_actions += possible_jumps
-
-                except ValueError:
-                    continue
+                    if is_jump:
+                        possible_jumps = self.discover_jumps(MoveAction(frog_coord, direction), new_coord)
+                        possible_actions += possible_jumps
 
         possible_actions.append(GrowAction())  # Add grow action
-        # print("generate_actions: ", possible_actions)
         return possible_actions
+
 
     def discover_jumps(self, prev_move_action: MoveAction, latest_coord: Coord) -> list[MoveAction]:
 
-        """
-        Recursively discover all possible jump moves from a given coordinate.
-        """
-        possible_jumps = []
+            """
+            Recursively discover all possible jump moves from a given coordinate.
+            """
+            possible_jumps = []
 
-        for direction in self.get_possible_directions():
-            try:
-                new_coord = latest_coord + direction
-            except ValueError:
-                return possible_jumps
+            for direction in self.get_possible_directions():
+                new_coord, is_jump = self._resolve_destination(latest_coord, direction)
 
-            if self._within_bounds(new_coord) and (new_coord in self._blue_frogs or new_coord in self._red_frogs):
-                try:
-                    new_coord += direction  # Handle jump
-
-                    if new_coord in self._lily_pads:
-    
-                        list_direction = prev_move_action.directions + (direction,)
-
-                        # print(new_coord, latest_coord, list_direction)
-
-                        if new_coord != latest_coord - list_direction[len(list_direction) - 2] - list_direction[len(list_direction) - 2]:
-
-                            possible_jumps.append(MoveAction(prev_move_action.coord, list_direction))
-
- 
-                            # print("possible_jumps before next discover", possible_jumps)
-
-                            # Recursively discover further jumps
-                            sub_discover = self.discover_jumps(
-                                MoveAction(prev_move_action.coord, list_direction),
-                                new_coord
-                            )
-                            # print("sub_discover", sub_discover)
-                            possible_jumps += sub_discover
-
-                            # print("possible_jumps before next direction", possible_jumps)
-                except ValueError:
+                if not is_jump: # try new direction
                     continue
+                else: # valid next jump
+                    list_direction = prev_move_action.directions + (direction,)
 
+                    if new_coord != latest_coord - list_direction[len(list_direction) - 2] - list_direction[len(list_direction) - 2]:
 
-        # print("possible_jumps in discover_jump", possible_jumps)
-        return possible_jumps
+                        possible_jumps.append(MoveAction(prev_move_action.coord, list_direction))
+
+                        # Recursively discover further jumps
+                        sub_discover = self.discover_jumps(
+                            MoveAction(prev_move_action.coord, list_direction),
+                            new_coord
+                        )
+        
+                        possible_jumps += sub_discover
+                
+            return possible_jumps
 
 
     @property
     def game_over(self) -> bool:
         """
-        True iff there is a winner
+        Returns True if the game is over, i.e., all frogs of one side have reached the opposite side.
         """
-        # If a player's tokens are all in the final row, the game is over.
-        [True for coord in self._red_frogs if coord.r == BOARD_N - 1]
-        [True for coord in self._blue_frogs if coord.r == 0]
+        # Check if all red frogs have reached the final row
+        if all(coord.r == BOARD_N - 1 for coord in self._red_frogs):
+            return True
 
-        if len(self._red_frogs) == 0 or len(self._blue_frogs) == 0:
+        # Check if all blue frogs have reached the first row
+        if all(coord.r == 0 for coord in self._blue_frogs):
             return True
 
         return False
