@@ -16,10 +16,6 @@ class MiniMaxAgent:
     def __init__(self, color: PlayerColor, **referee: dict):
         """
         Initializes the agent with the given player color.
-
-        Args:
-            color (PlayerColor): The color of the player (RED or BLUE).
-            **referee (dict): Additional referee data.
         """
         self._color = color
         self._internal_state = BoardState(is_initial_board=True)
@@ -32,21 +28,23 @@ class MiniMaxAgent:
     def action(self, **referee: dict) -> Action:
         """
         Determines the best action to take using the Minimax algorithm.
-
-        Args:
-            **referee (dict): Additional referee data.
-
-        Returns:
-            Action: The best action determined by the Minimax algorithm.
         """
         possible_actions = self._internal_state.generate_actions()
+        # print("possible actions: ", possible_actions)
+        
+        # find multiple jumps and print
+        # print("action: ", possible_actions)
+        # if self._num_nodes > 80313:
+        #         quit()
+
         action_values = {}
 
         for action in possible_actions:
             new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
             self._num_nodes += 1
-            action_values[action] = self._minimax(new_state, is_pruning=PRUNING)
 
+            action_values[action] = self._minimax(new_state, is_pruning=PRUNING)
+        
         action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
         
         return action
@@ -102,7 +100,7 @@ class MiniMaxAgent:
                     break
 
             return min_eval
-            
+                
     def _evaluate(self, state: BoardState) -> float:
         """
         Heuristic evaluation of the current board state.
@@ -110,14 +108,10 @@ class MiniMaxAgent:
         Strategy: Linear weighted sum of features.
         Features:
             1. Number of frogs on the target lily pads.
-            2. Number of frogs adjacent to another frog (weighted by whose turn it is).
+            2. Piece protection (number of frogs adjacent to another frog and protected).
             3. Negative sum of the distance of the frogs to the nearest target lily pads.
-
-        Args:
-            state (State): The current game state.
-
-        Returns:
-            float: The heuristic value of the state.
+            4. Move count (mobility).
+            5. Central Control.
         """
         def get_est_distance(target: Coord, curr_frog: Coord) -> int:
             """
@@ -128,53 +122,118 @@ class MiniMaxAgent:
             n_diag_moves = min(verti_dist, horiz_dist)
             return verti_dist + horiz_dist - n_diag_moves
 
+        def calculate_safety_penalty(remaining_red, remaining_blue, color:PlayerColor) -> float:
+            """
+            Calculate the safety penalty for a given set of frogs.
+            """
+            penalty = 0
+            if color == PlayerColor.RED:
+                frogs = remaining_red
+                opponent_frogs = remaining_blue
+            else:
+                frogs = remaining_blue
+                opponent_frogs = remaining_red
+
+            for frog in opponent_frogs:
+                for another_frog in frogs + opponent_frogs:
+                    if color == PlayerColor.RED: # count jumps of blue frogs
+                        condition = frog.r - another_frog.r == 1
+                    else:
+                        condition = another_frog.r - frog.r == 1
+
+                    if condition and abs(another_frog.c - frog.c) <= 1:
+                        jump_direction = Direction(another_frog.r - frog.r, another_frog.c - frog.c)
+                        try:
+                            jump_target = frog + jump_direction + jump_direction
+                        except ValueError:
+                            jump_target = None
+
+                        if jump_target and jump_target in state._lily_pads:
+                            penalty += 1
+                        elif jump_target and jump_target in state._red_frogs or jump_target in state._blue_frogs:
+                            penalty -= 0.5
+            return penalty
+
+        def calculate_mobility(state: BoardState, color: PlayerColor) -> int:
+            """
+            Calculate the number of possible moves for a given player.
+            """
+            mobility = 0
+            frogs = state._red_frogs if color == PlayerColor.RED else state._blue_frogs
+
+            for frog in frogs:
+                for direction in Direction:
+                    try:
+                        dest_coord = frog + direction
+                        jump_coord = dest_coord + direction
+
+                        if dest_coord in state._lily_pads or jump_coord in state._lily_pads:
+                            mobility += 1
+                    except ValueError:
+                        pass
+
+            return mobility
+
+        def calculate_central_control(color: PlayerColor) -> int:
+            """
+            Calculate the number of frogs in the central 4x4 area.
+            """
+            center_area = [Coord(r, c) for r in range(3, 5) for c in range(3, 5)]
+
+            if color == PlayerColor.RED:
+                frogs = state._red_frogs
+            else:
+                frogs = state._blue_frogs
+
+            return sum(1 for frog in frogs if frog in center_area)
+
         # Determine the current player's color
         color = state._turn_color
 
         # Feature 1: Number of frogs on the target lily pads
         finished_red = [frog for frog in state._red_frogs if frog.r == 7]
         finished_blue = [frog for frog in state._blue_frogs if frog.r == 0]
-        num_finished_red = len(finished_red)
-        num_finished_blue = len(finished_blue)
+        finished_diff = len(finished_red) - len(finished_blue)
 
-        # Feature 2: Number of frogs adjacent to another frog (weighted by whose turn it is)
-        num_adjacent_frog = 0
+        # Feature 2: Safety penalty
         remaining_red = [frog for frog in state._red_frogs if frog not in finished_red]
         remaining_blue = [frog for frog in state._blue_frogs if frog not in finished_blue]
-
-        for red in remaining_red:
-            for blue in remaining_blue:
-                if blue.r >= red.r and blue.r-red.r == 1 and abs(blue.c-red.c) <= 1:
-                    num_adjacent_frog += 1
-
+        safety_penalty_red = calculate_safety_penalty(remaining_red, remaining_blue, PlayerColor.RED)
+        safety_penalty_blue = calculate_safety_penalty(remaining_red, remaining_blue, PlayerColor.BLUE)
+        vulnerable_diff = safety_penalty_red - safety_penalty_blue
 
         # Feature 3: Negative sum of the distance of the frogs to the nearest target lily pads
         total_dis_red = sum(get_est_distance(Coord(r=7, c=frog.c), frog) for frog in state._red_frogs)
         total_dis_blue = sum(get_est_distance(Coord(r=0, c=frog.c), frog) for frog in state._blue_frogs)
+        total_dis_diff = total_dis_red - total_dis_blue
+
+        # Feature 4: Move count (mobility)
+        red_move = calculate_mobility(state, PlayerColor.RED)
+        blue_move = calculate_mobility(state, PlayerColor.BLUE)
+        mobility_diff = red_move - blue_move
+
+        # Feature 5: Central Control
+        red_central_control = calculate_central_control(PlayerColor.RED)
+        blue_central_control = calculate_central_control(PlayerColor.BLUE)
+        central_control_diff = red_central_control - blue_central_control
 
         # Calculate scores for RED and BLUE
-        weights = [10, 5, -1]
-        red_score = weights[0] * num_finished_red + weights[1]*num_adjacent_frog * (1 if color == PlayerColor.RED else -1) + weights[2]*total_dis_red
-        blue_score = weights[0] * num_finished_blue + weights[1]*num_adjacent_frog * (-1 if color == PlayerColor.RED else 1) + weights[2]*total_dis_blue
+        weights = [5, 1, -1, 1, 1]  # Weights for each feature
+        diff_score = [finished_diff, vulnerable_diff, total_dis_diff, mobility_diff, central_control_diff]
+        score = sum(w * s for w, s in zip(weights, diff_score))
 
-        # Debugging output
-        # print(f"Red Score: {red_score}, Blue Score: {blue_score}")
-
-        # Return the difference in scores (higher is better for RED)
-        return red_score - blue_score
+        return score
 
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         """
         Updates the agent's internal game state after a player takes their turn.
-
-        Args:
-            color (PlayerColor): The color of the player who took the action.
-            action (Action): The action taken by the player.
-            **referee (dict): Additional referee data.
         """
         print(self._num_nodes)
         self._internal_state = self._internal_state.apply_action(color, action)
+
+        # if (isinstance(action, MoveAction) and len(action.directions) > 1):
+        #     print("Move from", action.coord, "to", action.coord + action.directions[-1], "with directions", action.directions)
         
         # print(self._internal_state._red_frogs)
         # print(self._internal_state._blue_frogs)

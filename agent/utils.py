@@ -90,15 +90,10 @@ class BoardState:
             output += "\n"
         return output
 
+    
     def apply_action(self, color: PlayerColor, action: Action) -> "BoardState":
         """
         Applies an action to the current board state and returns a new state.
-
-        Args:
-            action (Action): The action to apply.
-
-        Returns:
-            BoardState: A new board state after applying the action.
         """
         if action is None:
             return self
@@ -165,9 +160,6 @@ class BoardState:
     def generate_actions(self) -> list[Action]:
         """
         Generate all possible actions for the current state and player.
-
-        Returns:
-            list[Action]: A list of possible actions.
         """
         possible_actions = []
         frogs_coord = self._red_frogs if self._turn_color == PlayerColor.RED else self._blue_frogs
@@ -185,58 +177,62 @@ class BoardState:
                     if new_coord in self._lily_pads:
                         possible_actions.append(MoveAction(frog_coord, direction))
 
-                        # TODO: attempt to jump again to generate multiple jump moves
                         if is_jump:
                             possible_jumps = self.discover_jumps(MoveAction(frog_coord, direction), new_coord)
-                            # print(possible_jumps)
-
+                            # print("possible_jumps", possible_jumps)
                             possible_actions += possible_jumps
 
                 except ValueError:
                     continue
 
         possible_actions.append(GrowAction())  # Add grow action
+        # print("generate_actions: ", possible_actions)
         return possible_actions
 
-    def discover_jumps(self, prev_move_action: MoveAction, latest_coord: Coord, visited: set[Coord] = None) -> list[MoveAction]:
+    def discover_jumps(self, prev_move_action: MoveAction, latest_coord: Coord) -> list[MoveAction]:
 
         """
         Recursively discover all possible jump moves from a given coordinate.
-
-        Args:
-            prev_move_action (MoveAction): The previous move action leading to this point.
-            latest_coord (Coord): The current coordinate after the last jump.
-            visited (set[Coord], optional): A set of coordinates already visited during this jump sequence.
-
-        Returns:
-            list[MoveAction]: A list of all possible jump actions.
         """
-        if visited is None:
-            visited = set()
-
         possible_jumps = []
-        visited.add(latest_coord)  # Mark the current coordinate as visited
 
         for direction in self.get_possible_directions():
-            new_coord = latest_coord + direction
+            try:
+                new_coord = latest_coord + direction
+            except ValueError:
+                return possible_jumps
 
             if self._within_bounds(new_coord) and (new_coord in self._blue_frogs or new_coord in self._red_frogs):
-                new_coord += direction  # Handle jump
-                # print(new_coord)
-                # print(self._lily_pads)
+                try:
+                    new_coord += direction  # Handle jump
 
-                if new_coord in self._lily_pads and new_coord not in visited:
-                    # Add the jump move to the possible actions
-                    list_direction = prev_move_action.directions + (direction,)
-                    possible_jumps.append(MoveAction(prev_move_action.coord, list_direction))
+                    if new_coord in self._lily_pads:
+    
+                        list_direction = prev_move_action.directions + (direction,)
 
-                    # Recursively discover further jumps
-                    possible_jumps += self.discover_jumps(
-                        MoveAction(prev_move_action.coord, list_direction),
-                        new_coord,
-                        visited.copy()  # Pass a copy of the visited set to avoid modifying the original
-                    )
+                        # print(new_coord, latest_coord, list_direction)
 
+                        if new_coord != latest_coord - list_direction[len(list_direction) - 2] - list_direction[len(list_direction) - 2]:
+
+                            possible_jumps.append(MoveAction(prev_move_action.coord, list_direction))
+
+ 
+                            # print("possible_jumps before next discover", possible_jumps)
+
+                            # Recursively discover further jumps
+                            sub_discover = self.discover_jumps(
+                                MoveAction(prev_move_action.coord, list_direction),
+                                new_coord
+                            )
+                            # print("sub_discover", sub_discover)
+                            possible_jumps += sub_discover
+
+                            # print("possible_jumps before next direction", possible_jumps)
+                except ValueError:
+                    continue
+
+
+        # print("possible_jumps in discover_jump", possible_jumps)
         return possible_jumps
 
 
@@ -263,9 +259,6 @@ class BoardState:
     def get_possible_directions(self) -> list[Direction]:
         """
         Gets all possible movement directions for the current player.
-
-        Returns:
-            list[Direction]: A list of possible directions.
         """
         if self._turn_color == PlayerColor.RED:
             return [Direction.Down, Direction.Right, Direction.Left, Direction.DownLeft, Direction.DownRight]
@@ -276,9 +269,6 @@ class BoardState:
     def copy(self) -> "BoardState":
         """
         Creates a deep copy of the current game state.
-
-        Returns:
-            BoardState: A copy of the current game state.
         """
         return BoardState(
             blue_frogs=self._blue_frogs.copy(),
