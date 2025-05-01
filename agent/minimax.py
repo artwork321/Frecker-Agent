@@ -158,25 +158,25 @@ class MiniMaxAgent:
         # Determine the current player's color
         color = state._turn_color
 
-        # Feature 1: Number of frogs on the target lily pads
+        # Feature 1: Number of frogs on the target lily pads -- want to maximize this
         finished_red = [frog for frog in state._red_frogs if frog.r == 7]
         finished_blue = [frog for frog in state._blue_frogs if frog.r == 0]
         finished_diff = len(finished_red) - len(finished_blue)
-
-        # Feature 2: Safety penalty
+        
+        # Feature 2: Score for the number of jumps opponent can make -- want to reduce this
         remaining_red = [frog for frog in state._red_frogs if frog not in finished_red]
         remaining_blue = [frog for frog in state._blue_frogs if frog not in finished_blue]
         safety_penalty_red = calculate_safety_penalty(remaining_red, remaining_blue, PlayerColor.RED)
         safety_penalty_blue = calculate_safety_penalty(remaining_red, remaining_blue, PlayerColor.BLUE)
         vulnerable_diff = safety_penalty_red - safety_penalty_blue
 
-        # Feature 3: Negative sum of the distance of the frogs to the nearest target lily pads
+        # Feature 3: Sum of the distance of the frogs to the nearest target lily pads -- want to reduce this
         total_dis_red = sum(get_est_distance(Coord(r=7, c=frog.c), frog) for frog in state._red_frogs)
         total_dis_blue = sum(get_est_distance(Coord(r=0, c=frog.c), frog) for frog in state._blue_frogs)
         total_dis_diff = total_dis_red - total_dis_blue
 
         # Calculate scores for RED and BLUE
-        weights = [5, 1, -5]  # Weights for each feature
+        weights = [10, -3, -5]  # Weights for each feature
         diff_score = [finished_diff, vulnerable_diff, total_dis_diff]
         score = sum(w * s for w, s in zip(weights, diff_score))
 

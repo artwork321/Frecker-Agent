@@ -107,13 +107,9 @@ class BoardState:
                 dest_coord = dest_coord + direction
                 if dest_coord in self._blue_frogs or dest_coord in self._red_frogs:
                     dest_coord += direction  # Handle jump
-
-            # if len(action.directions) > 1:
-                # print(self.render())
-                # print(dest_coord)
-                # print("Move from", action.coord, "to", dest_coord, "with directions", action.directions)
             
             new_state._resolve_move_action(color, action.coord, dest_coord)
+            
         elif isinstance(action, GrowAction):
             new_state._resolve_grow_action(color)
 
@@ -156,6 +152,7 @@ class BoardState:
             if cell not in self._blue_frogs and cell not in self._red_frogs and cell not in self._lily_pads:
                 self._lily_pads.add(cell)
     
+
     def _resolve_destination(self, curr_coord: Coord, direction: Direction) -> Coord:
         try:
             is_jump = False
