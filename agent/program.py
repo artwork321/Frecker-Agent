@@ -3,64 +3,236 @@
 
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
-    
+from referee.game.constants import *    
+import math
+from agent.state import *
+# COMP30024 Artificial Intelligence, Semester 1 2025
+# Project Part B: Game Playing Agent
+
 
 class Agent:
     """
-    This class is the "entry point" for your agent, providing an interface to
-    respond to various Freckers game events.
+    This class implements a game-playing agent using the Minimax algorithm.
     """
 
     def __init__(self, color: PlayerColor, **referee: dict):
         """
-        This constructor method runs when the referee instantiates the agent.
-        Any setup and/or precomputation should be done here.
+        Initializes the agent with the given player color.
         """
-        self._color = color
-        match color:
-            case PlayerColor.RED:
-                print("Testing: I am playing as RED")
-            case PlayerColor.BLUE:
-                print("Testing: I am playing as BLUE")
+        self._internal_state = Board()
+        self._is_maximizer = color == PlayerColor.RED
+        self._num_nodes = 0
+
+        print(f"Testing: I am playing as {'RED' if self._is_maximizer else 'BLUE'}")
+
 
     def action(self, **referee: dict) -> Action:
         """
-        This method is called by the referee each time it is the agent's turn
-        to take an action. It must always return an action object. 
+        Determines the best action to take using the Minimax algorithm.
         """
+        def convert_to_directions(tuple_list: list[tuple[int, int]]) -> list[Direction]:
+            tuple_dir = tuple(Direction(t) for t in tuple_list)
+            if len(tuple_dir) == 1:
+                return tuple_dir[0]
+            else:
+                return tuple_dir
 
-        # Below we have hardcoded two actions to be played depending on whether
-        # the agent is playing as BLUE or RED. Obviously this won't work beyond
-        # the initial moves of the game, so you should use some game playing
-        # technique(s) to determine the best action to take.
-        match self._color:
-            case PlayerColor.RED:
-                print("Testing: RED is playing a MOVE action")
-                return MoveAction(
-                    Coord(7, 3),
-                    [Direction.Down]
-                )
-            case PlayerColor.BLUE:
-                print("Testing: BLUE is playing a GROW action")
-                return GrowAction()
+        def convert_action(origin, directions):
+            converted_dir = convert_to_directions(directions)
+            return MoveAction(Coord(r=origin[0], c=origin[1]), converted_dir)
+
+        possible_actions = self._internal_state.generate_move_actions()
+        possible_actions.append(None)  # Represent the grow action as None
+
+        # print(possible_actions)
+
+        action_values = {}
+
+        for move in possible_actions:
+            is_grow = move is None  # Check if the action is a grow action
+
+            self._internal_state.apply_action(move, is_grow=is_grow)
+            self._num_nodes += 1
+
+            if is_grow:
+                action = GrowAction()
+            else:
+                origin, directions, _ = move
+                action = convert_action(origin, directions)
+            
+            action_values[action] = self._minimax(is_pruning=PRUNING)
+
+            self._internal_state.undo_action(is_grow=is_grow)
+
+        action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
+        
+        sorted_dict = dict(sorted(
+            action_values.items(), 
+            key=lambda item: (item[0].coord.r, item[0].coord.c) if hasattr(item[0], 'coord') else (float('inf'), float('inf'))
+        ))
+
+        print(sorted_dict)
+
+        return action
+
+
+    def _minimax(self, depth: int = 0, alpha = -math.inf, beta = math.inf, is_pruning=True) -> float:
+        
+        depth += 1
+
+        # Base case: game over or depth limit reached
+        if self._internal_state.game_over or depth >= DEPTH_LIMIT:
+            return self._evaluate()
+
+        is_maximizing = self._internal_state._turn_color == 2
+        # print("inside minimax: ", depth)
+        # print("who: ", is_maximizing)
+
+        if is_maximizing:
+            # print("MAX")
+            max_eval = -math.inf
+
+            # Generate all possible actions, including the grow action
+            actions = self._internal_state.generate_move_actions()
+            actions.append(None)  # Represent the grow action as None
+
+            for move in actions:
+                is_grow = move is None  # Check if the action is a grow action
+
+                self._internal_state.apply_action(move, is_grow=is_grow)
+                self._num_nodes += 1
+
+                eval = self._minimax(depth, alpha, beta, is_pruning)
+
+                self._internal_state.undo_action(is_grow=is_grow)
+
+                max_eval = max(max_eval, eval)
+                alpha = max(alpha, eval)
+
+                if is_pruning and beta <= max_eval:
+                    break
+
+            # print("MAX EVAL: ", max_eval)
+            # print("alpha: ", alpha)
+            # print("beta: ", beta)
+            return max_eval
+        else:
+            min_eval = math.inf
+
+            # Generate all possible actions, including the grow action
+            actions = self._internal_state.generate_move_actions()
+            actions.append(None)  # Represent the grow action as None
+
+            for move in actions:
+                is_grow = move is None  # Check if the action is a grow action
+
+                self._internal_state.apply_action(move, is_grow=is_grow)
+                self._num_nodes += 1
+
+                eval = self._minimax(depth, alpha, beta, is_pruning)
+                # print("EVAL: ", eval)
+
+                self._internal_state.undo_action(is_grow=is_grow)
+
+                min_eval = min(min_eval, eval)
+                beta = min(beta, eval)
+
+                # Prune the branch
+                if is_pruning and min_eval <= alpha:
+                    break
+        
+            # print("MIN EVAL: ", min_eval)
+            # print("alpha: ", alpha)
+            # print("beta: ", beta)
+
+            return min_eval
+                
+    def _evaluate(self) -> float:
+
+        def get_est_distance(target, curr_frog) -> int:
+            """
+            Estimate the distance between a frog and a target lily pad.
+            """
+            verti_dist = abs(target[0] - curr_frog[0])
+            horiz_dist = abs(target[1] - curr_frog[1])
+            n_diag_moves = min(verti_dist, horiz_dist)
+            return verti_dist + horiz_dist - n_diag_moves
+
+
+        def calculate_safety_penalty(remaining_red, remaining_blue, color:PlayerColor) -> float:
+            """
+            Calculate the safety penalty for a given set of frogs.
+            """
+            penalty = 0
+            if color == PlayerColor.RED:
+                opponent_frogs = remaining_blue
+                legal_directions = LEGAL_BLUE_DIRECTION
+            else:
+                opponent_frogs = remaining_red
+                legal_directions = LEGAL_RED_DIRECTION
+
+            for frog in opponent_frogs:
+                for direction in legal_directions:
+                    nei_x, nei_y, is_jump = self._internal_state._get_destination(frog, direction)
+    
+                    if (is_jump):
+                        penalty += 1
+                    else:
+                        penalty -= 0.5
+
+            return penalty
+
+        # # Feature 1: Number of frogs on the target lily pads -- want to maximize this
+        finished_red = [frog for frog in self._internal_state._red_frogs if frog[0] == 7]
+        finished_blue = [frog for frog in self._internal_state._blue_frogs if frog[0] == 0]
+        finished_diff = len(finished_red) - len(finished_blue)
+        
+        # # Feature 2: Score for the number of jumps opponent can make -- want to reduce this
+        remaining_red = [frog for frog in self._internal_state._red_frogs if frog not in finished_red]
+        remaining_blue = [frog for frog in self._internal_state._blue_frogs if frog not in finished_blue]
+        safety_penalty_red = calculate_safety_penalty(remaining_red, remaining_blue, PlayerColor.RED)
+        safety_penalty_blue = calculate_safety_penalty(remaining_red, remaining_blue, PlayerColor.BLUE)
+        vulnerable_diff = safety_penalty_red - safety_penalty_blue
+
+        # Feature 3: Sum of the distance of the frogs to the nearest target lily pads -- want to reduce this
+        total_dis_red = sum(get_est_distance((7, frog[1]), frog) for frog in self._internal_state._red_frogs)
+        total_dis_blue = sum(get_est_distance((0, frog[1]), frog) for frog in self._internal_state._blue_frogs)
+        total_dis_diff = total_dis_red - total_dis_blue
+
+        # Calculate scores for RED and BLUE
+        weights = [10, -1 , -3]  # Weights for each feature
+        diff_score = [finished_diff, vulnerable_diff, total_dis_diff]
+        score = sum(w * s for w, s in zip(weights, diff_score))
+
+        # print(diff_score)
+
+        return score
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         """
-        This method is called by the referee after a player has taken their
-        turn. You should use it to update the agent's internal game state. 
+        Updates the agent's internal game state after a player takes their turn.
         """
 
-        # There are two possible action types: MOVE and GROW. Below we check
-        # which type of action was played and print out the details of the
-        # action for demonstration purposes. You should replace this with your
-        # own logic to update your agent's internal game state representation.
-        match action:
-            case MoveAction(coord, dirs):
-                dirs_text = ", ".join([str(dir) for dir in dirs])
-                print(f"Testing: {color} played MOVE action:")
-                print(f"  Coord: {coord}")
-                print(f"  Directions: {dirs_text}")
-            case GrowAction():
-                print(f"Testing: {color} played GROW action")
-            case _:
-                raise ValueError(f"Unknown action type: {action}")
+        if isinstance(action, MoveAction):
+
+            origin = (action.coord.r, action.coord.c)
+            directions = action.directions
+            
+            curr_coord = origin
+            for enum_dir in directions:
+                direction = tuple(enum_dir.value)
+
+                new_x, new_y, _ = self._internal_state._get_destination(curr_coord, direction)
+                curr_coord = (new_x, new_y)
+
+            move = (origin, directions, curr_coord)
+            # print(self._internal_state.pieces)
+
+            self._internal_state.apply_action(move, False)
+            # print("DEBUG move: ", self._internal_state._blue_frogs)
+
+        elif isinstance(action, GrowAction):
+            self._internal_state.apply_action(None, True)
+            # print("DEBUG glow: ", self._internal_state.pieces)
+        
+        # print(self._internal_state._red_frogs)

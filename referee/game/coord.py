@@ -93,6 +93,8 @@ class Direction(Enum):
                 return self.value.c
             case _:
                 return super().__getattribute__(__name)
+    
+    
 
 
 @dataclass(order=True, frozen=True)

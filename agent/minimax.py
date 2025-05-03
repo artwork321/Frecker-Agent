@@ -40,10 +40,22 @@ class MiniMaxAgent:
         action_values = {}
 
         for action in possible_actions:
+            # print(action)
             new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
             self._num_nodes += 1
 
+            # print("Action: ", action)
+            # print(new_state.render())
+
             action_values[action] = self._minimax(new_state, is_pruning=PRUNING)
+
+            # if action.coord == Coord(0, 1) and action.directions[0] == Direction.DownRight:
+            #     quit()
+        sorted_dict = dict(sorted(
+            action_values.items(), 
+            key=lambda item: (item[0].coord.r, item[0].coord.c) if hasattr(item[0], 'coord') else (float('inf'), float('inf'))
+        ))
+        print(sorted_dict)
         
         action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
         
@@ -151,12 +163,10 @@ class MiniMaxAgent:
 
                         if jump_target and jump_target in state._lily_pads:
                             penalty += 1
-                        elif jump_target and jump_target in state._red_frogs or jump_target in state._blue_frogs:
+                        elif jump_target and jump_target in state._red_frogs or jump_target in state._blue_frogs or jump_target in state._lily_pads:
                             penalty -= 0.5
-            return penalty
 
-        # Determine the current player's color
-        color = state._turn_color
+            return penalty
 
         # Feature 1: Number of frogs on the target lily pads -- want to maximize this
         finished_red = [frog for frog in state._red_frogs if frog.r == 7]
@@ -176,10 +186,14 @@ class MiniMaxAgent:
         total_dis_diff = total_dis_red - total_dis_blue
 
         # Calculate scores for RED and BLUE
-        weights = [10, -3, -5]  # Weights for each feature
+        weights = [10, -1, -3]  # Weights for each feature
         diff_score = [finished_diff, vulnerable_diff, total_dis_diff]
         score = sum(w * s for w, s in zip(weights, diff_score))
+        # print(finished_diff, vulnerable_diff, total_dis_diff)
 
+        # if (vulnerable_diff == -2):
+        #     print(state.render())
+            
         return score
 
 

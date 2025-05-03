@@ -25,9 +25,9 @@ class BoardState:
                 turn_color (PlayerColor, optional): The current player's turn.
                 is_initial_board (bool): Whether to initialize the board to its default state.
             """
-            self._blue_frogs = blue_frogs or set()
-            self._red_frogs = red_frogs or set()
-            self._lily_pads = lily_pads or set()
+            self._blue_frogs = blue_frogs or []
+            self._red_frogs = red_frogs or []
+            self._lily_pads = lily_pads or []
             self._turn_color = turn_color
 
             if is_initial_board:
@@ -43,13 +43,15 @@ class BoardState:
         for coord in init_board._state:
             cell_state = init_board.__getitem__(coord)
             if cell_state.state == PlayerColor.BLUE:
-                self._blue_frogs.add(coord)
+                self._blue_frogs.append(coord)
             elif cell_state.state == PlayerColor.RED:
-                self._red_frogs.add(coord)
+                self._red_frogs.append(coord)
             elif cell_state.state == "LilyPad":
-                self._lily_pads.add(coord)
+                self._lily_pads.append(coord)
 
         self._turn_color = init_board.turn_color
+
+        # print(self._blue_frogs)
 
     def render(self, use_color: bool = False) -> str:
         """
@@ -127,10 +129,10 @@ class BoardState:
         """
         if color == PlayerColor.RED:
             self._red_frogs.remove(source_coord)
-            self._red_frogs.add(dest_coord)
+            self._red_frogs.append(dest_coord)
         else:
             self._blue_frogs.remove(source_coord)
-            self._blue_frogs.add(dest_coord)
+            self._blue_frogs.append(dest_coord)
 
         self._lily_pads.remove(dest_coord)
 
@@ -150,7 +152,7 @@ class BoardState:
 
         for cell in neighbour_cells: # add new lily pads if cell is empty
             if cell not in self._blue_frogs and cell not in self._red_frogs and cell not in self._lily_pads:
-                self._lily_pads.add(cell)
+                self._lily_pads.append(cell)
     
 
     def _resolve_destination(self, curr_coord: Coord, direction: Direction) -> Coord:
