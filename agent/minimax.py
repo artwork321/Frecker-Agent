@@ -31,16 +31,12 @@ class MiniMaxAgent:
         """
         possible_actions = self._internal_state.generate_actions()
         # print("possible actions: ", possible_actions)
-        
-        # find multiple jumps and print
-        # print("action: ", possible_actions)
-        # if self._num_nodes > 80313:
-        #         quit()
+        # print("inefficient minimax: ", len(possible_actions))
 
         action_values = {}
 
         for action in possible_actions:
-            # print(action)
+
             new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
             self._num_nodes += 1
 
@@ -49,13 +45,11 @@ class MiniMaxAgent:
 
             action_values[action] = self._minimax(new_state, is_pruning=PRUNING)
 
-            # if action.coord == Coord(0, 1) and action.directions[0] == Direction.DownRight:
-            #     quit()
-        sorted_dict = dict(sorted(
-            action_values.items(), 
-            key=lambda item: (item[0].coord.r, item[0].coord.c) if hasattr(item[0], 'coord') else (float('inf'), float('inf'))
-        ))
-        print(sorted_dict)
+        # sorted_dict = dict(sorted(
+        #     action_values.items(), 
+        #     key=lambda item: (item[0].coord.r, item[0].coord.c) if hasattr(item[0], 'coord') else (float('inf'), float('inf'))
+        # ))
+        # print(sorted_dict)
         
         action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
         
@@ -76,7 +70,6 @@ class MiniMaxAgent:
             float: The minimax value of the state.
         """
         depth += 1
-        # print(alpha, beta)
 
         # Base case: game over or depth limit reached
         if state.game_over or depth >= DEPTH_LIMIT:
@@ -189,11 +182,7 @@ class MiniMaxAgent:
         weights = [10, -1, -3]  # Weights for each feature
         diff_score = [finished_diff, vulnerable_diff, total_dis_diff]
         score = sum(w * s for w, s in zip(weights, diff_score))
-        # print(finished_diff, vulnerable_diff, total_dis_diff)
 
-        # if (vulnerable_diff == -2):
-        #     print(state.render())
-            
         return score
 
 
@@ -201,8 +190,6 @@ class MiniMaxAgent:
         """
         Updates the agent's internal game state after a player takes their turn.
         """
-        print(self._num_nodes)
+        print("First minimax: ", self._num_nodes)
+        print("First minimax: ", referee["time_remaining"])
         self._internal_state = self._internal_state.apply_action(color, action)
-        # print(self._internal_state._red_frogs)
-        # print(self._internal_state._blue_frogs)
-        # print(self._internal_state._lily_pads)

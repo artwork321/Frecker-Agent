@@ -1,6 +1,6 @@
 # COMP30024 Artificial Intelligence, Semester 1 2025
 # Project Part B: Game Playing Agent
-
+import time 
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
 from referee.game.constants import *    
@@ -44,8 +44,6 @@ class Agent:
         possible_actions = self._internal_state.generate_move_actions()
         possible_actions.append(None)  # Represent the grow action as None
 
-        # print(possible_actions)
-
         action_values = {}
 
         for move in possible_actions:
@@ -66,12 +64,12 @@ class Agent:
 
         action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
         
-        sorted_dict = dict(sorted(
-            action_values.items(), 
-            key=lambda item: (item[0].coord.r, item[0].coord.c) if hasattr(item[0], 'coord') else (float('inf'), float('inf'))
-        ))
+        # sorted_dict = dict(sorted(
+        #     action_values.items(), 
+        #     key=lambda item: (item[0].coord.r, item[0].coord.c) if hasattr(item[0], 'coord') else (float('inf'), float('inf'))
+        # ))
 
-        print(sorted_dict)
+        # print(sorted_dict)
 
         return action
 
@@ -84,12 +82,9 @@ class Agent:
         if self._internal_state.game_over or depth >= DEPTH_LIMIT:
             return self._evaluate()
 
-        is_maximizing = self._internal_state._turn_color == 2
-        # print("inside minimax: ", depth)
-        # print("who: ", is_maximizing)
+        is_maximizing = self._internal_state._turn_color == RED
 
         if is_maximizing:
-            # print("MAX")
             max_eval = -math.inf
 
             # Generate all possible actions, including the grow action
@@ -112,9 +107,6 @@ class Agent:
                 if is_pruning and beta <= max_eval:
                     break
 
-            # print("MAX EVAL: ", max_eval)
-            # print("alpha: ", alpha)
-            # print("beta: ", beta)
             return max_eval
         else:
             min_eval = math.inf
@@ -130,7 +122,6 @@ class Agent:
                 self._num_nodes += 1
 
                 eval = self._minimax(depth, alpha, beta, is_pruning)
-                # print("EVAL: ", eval)
 
                 self._internal_state.undo_action(is_grow=is_grow)
 
@@ -141,10 +132,6 @@ class Agent:
                 if is_pruning and min_eval <= alpha:
                     break
         
-            # print("MIN EVAL: ", min_eval)
-            # print("alpha: ", alpha)
-            # print("beta: ", beta)
-
             return min_eval
                 
     def _evaluate(self) -> float:
@@ -173,7 +160,7 @@ class Agent:
 
             for frog in opponent_frogs:
                 for direction in legal_directions:
-                    nei_x, nei_y, is_jump = self._internal_state._get_destination(frog, direction)
+                    _, _, is_jump = self._internal_state._get_destination(frog, direction)
     
                     if (is_jump):
                         penalty += 1
@@ -182,12 +169,12 @@ class Agent:
 
             return penalty
 
-        # # Feature 1: Number of frogs on the target lily pads -- want to maximize this
+        # Feature 1: Number of frogs on the target lily pads -- want to maximize this
         finished_red = [frog for frog in self._internal_state._red_frogs if frog[0] == 7]
         finished_blue = [frog for frog in self._internal_state._blue_frogs if frog[0] == 0]
         finished_diff = len(finished_red) - len(finished_blue)
         
-        # # Feature 2: Score for the number of jumps opponent can make -- want to reduce this
+        # Feature 2: Score for the number of jumps opponent can make -- want to reduce this
         remaining_red = [frog for frog in self._internal_state._red_frogs if frog not in finished_red]
         remaining_blue = [frog for frog in self._internal_state._blue_frogs if frog not in finished_blue]
         safety_penalty_red = calculate_safety_penalty(remaining_red, remaining_blue, PlayerColor.RED)
@@ -200,11 +187,9 @@ class Agent:
         total_dis_diff = total_dis_red - total_dis_blue
 
         # Calculate scores for RED and BLUE
-        weights = [10, -1 , -3]  # Weights for each feature
+        weights = [7, -0.22, -4]  # Weights for each feature
         diff_score = [finished_diff, vulnerable_diff, total_dis_diff]
         score = sum(w * s for w, s in zip(weights, diff_score))
-
-        # print(diff_score)
 
         return score
 
@@ -212,6 +197,7 @@ class Agent:
         """
         Updates the agent's internal game state after a player takes their turn.
         """
+        print("Efficient MINIMAX NODES: ", self._num_nodes)
 
         if isinstance(action, MoveAction):
 
@@ -226,13 +212,10 @@ class Agent:
                 curr_coord = (new_x, new_y)
 
             move = (origin, directions, curr_coord)
-            # print(self._internal_state.pieces)
-
             self._internal_state.apply_action(move, False)
-            # print("DEBUG move: ", self._internal_state._blue_frogs)
 
         elif isinstance(action, GrowAction):
             self._internal_state.apply_action(None, True)
-            # print("DEBUG glow: ", self._internal_state.pieces)
-        
-        # print(self._internal_state._red_frogs)
+
+        print(referee["time_remaining"])
+        print(referee["space_remaining"])

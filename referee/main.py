@@ -165,6 +165,7 @@ def main(options: Namespace|None=None):
         if game_result is None:
             rl.critical("result: draw")
         else:
+            print()
             rl.critical(f"result: {agents[game_result]['name']}")
 
         exit(0)
