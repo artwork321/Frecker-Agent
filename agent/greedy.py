@@ -1,13 +1,16 @@
 # COMP30024 Artificial Intelligence, Semester 1 2025
 # Project Part B: Game Playing Agent
+import time 
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
 from referee.game.constants import *    
 import math
 from agent.state import *
+# COMP30024 Artificial Intelligence, Semester 1 2025
+# Project Part B: Game Playing Agent
 
 
-class Agent:
+class GreedyAgent:
     """
     This class implements a game-playing agent using the Minimax algorithm.
     """
@@ -17,16 +20,12 @@ class Agent:
         Initializes the agent with the given player color.
         """
         self._internal_state = Board()
-        self._is_maximizer = color == PlayerColor.RED
-        self._num_nodes = 0
-        self.a = ['a'] * 10000000 # space remaining
-
-        print(f"Testing: I am playing as {'RED' if self._is_maximizer else 'BLUE'}")
+        self.color = color
 
 
     def action(self, **referee: dict) -> Action:
         """
-        Determines the best action to take using the Minimax algorithm.
+        Determines the best action with the highest evaluation score
         """
         def convert_to_directions(tuple_list: list[tuple[int, int]]) -> list[Direction]:
             tuple_dir = tuple(Direction(t) for t in tuple_list)
@@ -40,98 +39,34 @@ class Agent:
             return MoveAction(Coord(r=origin[0], c=origin[1]), converted_dir)
 
         possible_actions = self._internal_state.generate_move_actions()
-        possible_actions.append(None)  # Represent the grow action as None
+        possible_actions.append(None) 
 
-        action_values = {}
+        max_score = -math.inf
+        max_action = None
 
         for move in possible_actions:
-            is_grow = move is None  # Check if the action is a grow action
+            is_grow = move is None 
 
             self._internal_state.apply_action(move, is_grow=is_grow)
-            self._num_nodes += 1
+            score = self._evaluate()
+            print(score)
 
-            if is_grow:
-                action = GrowAction()
-            else:
-                origin, directions, _ = move
-                action = convert_action(origin, directions)
-            
-            action_values[action] = self._minimax(is_pruning=PRUNING)
+            if score > max_score:
+                max_score = score
+                max_action = move
 
             self._internal_state.undo_action(is_grow=is_grow)
 
-        action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
-        
-        # sorted_dict = dict(sorted(
-        #     action_values.items(), 
-        #     key=lambda item: (item[0].coord.r, item[0].coord.c) if hasattr(item[0], 'coord') else (float('inf'), float('inf'))
-        # ))
-
-        # print(sorted_dict)
-
-        return action
-
-
-    def _minimax(self, depth: int = 0, alpha = -math.inf, beta = math.inf, is_pruning=True) -> float:
-        
-        depth += 1
-
-        # Base case: game over or depth limit reached
-        if self._internal_state.game_over or depth >= DEPTH_LIMIT:
-            return self._evaluate()
-
-        is_maximizing = self._internal_state._turn_color == RED
-
-        if is_maximizing:
-            max_eval = -math.inf
-
-            # Generate all possible actions, including the grow action
-            actions = self._internal_state.generate_move_actions()
-            actions.append(None)  # Represent the grow action as None
-
-            for move in actions:
-                is_grow = move is None  # Check if the action is a grow action
-
-                self._internal_state.apply_action(move, is_grow=is_grow)
-                self._num_nodes += 1
-
-                eval = self._minimax(depth, alpha, beta, is_pruning)
-
-                self._internal_state.undo_action(is_grow=is_grow)
-
-                max_eval = max(max_eval, eval)
-                alpha = max(alpha, eval)
-
-                if is_pruning and beta <= max_eval:
-                    break
-
-            return max_eval
+        # return the action with the highest evaluation score
+        if max_action is None:
+            best_action = GrowAction()
         else:
-            min_eval = math.inf
+            origin, directions, _ = max_action
+            best_action = convert_action(origin, directions)
 
-            # Generate all possible actions, including the grow action
-            actions = self._internal_state.generate_move_actions()
-            actions.append(None)  # Represent the grow action as None
+        return best_action
 
-            for move in actions:
-                is_grow = move is None  # Check if the action is a grow action
 
-                self._internal_state.apply_action(move, is_grow=is_grow)
-                self._num_nodes += 1
-
-                eval = self._minimax(depth, alpha, beta, is_pruning)
-
-                self._internal_state.undo_action(is_grow=is_grow)
-
-                min_eval = min(min_eval, eval)
-                beta = min(beta, eval)
-
-                # Prune the branch
-                if is_pruning and min_eval <= alpha:
-                    break
-        
-            return min_eval
-                
     def _evaluate(self) -> float:
 
         def get_est_distance(target, curr_frog) -> int:
@@ -185,17 +120,18 @@ class Agent:
         total_dis_diff = total_dis_red - total_dis_blue
 
         # Calculate scores for RED and BLUE
-        weights = [10, -1, -3]  # Weights for each feature
+        weights = [1, -0.1, -1]  # Weights for each feature
         diff_score = [finished_diff, vulnerable_diff, total_dis_diff]
         score = sum(w * s for w, s in zip(weights, diff_score))
 
-        return score
+        # let RED is the maximizer and BLUE is the minimizer
+        return score if self.color == PlayerColor.RED else -score
 
+   
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         """
         Updates the agent's internal game state after a player takes their turn.
         """
-        print("Better Minimax Nodes: ", self._num_nodes)
 
         if isinstance(action, MoveAction):
 
@@ -214,6 +150,3 @@ class Agent:
 
         elif isinstance(action, GrowAction):
             self._internal_state.apply_action(None, True)
-
-        print("Time Remaining: ", referee["time_remaining"])
-        print("Space Remaining", referee["space_remaining"])

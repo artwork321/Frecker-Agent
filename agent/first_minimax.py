@@ -8,7 +8,7 @@ import math
 from agent.utils import *
 
 
-class MiniMaxAgent:
+class FirstMiniMaxAgent:
     """
     This class implements a game-playing agent using the Minimax algorithm.
     """
