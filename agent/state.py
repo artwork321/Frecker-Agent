@@ -4,15 +4,15 @@ import numpy as np
 ALL_DIRECTIONS = [(1,1),(1,0),(1,-1),(0,-1),(-1,-1),(-1,0),(-1,1),(0,1)]
 
 # list of 5 valid directions for each color
-LEGAL_RED_DIRECTION = [(1, 0), # down
-                        (1, -1), # downleft
+LEGAL_RED_DIRECTION = [(1, -1), # downleft
                         (1, 1), # downright
+                        (1, 0), # down
                        (0, 1), # right
                        (0, -1)] # left
 
-LEGAL_BLUE_DIRECTION = [(-1, 0), # up
-                        (-1, -1), # upleft
+LEGAL_BLUE_DIRECTION = [(-1, -1), # upleft
                         (-1, 1), # upright
+                        (-1, 0), # up
                         (0, 1), # right
                         (0, -1)] # left
 RED = 2
@@ -20,12 +20,13 @@ BLUE = -2
 LILYPAD = 1
 EMPTY = 0
 
-class Board:
+class AgentBoard:
 
     _blue_frogs = set()
     _red_frogs = set()
     _history = [] # list of board mutation. board mutation is a list of cell mutation
     _turn_color = RED
+    _turn_count = 0
 
     def __init__(self, n=8):
         self.n = n  # Board size
@@ -50,14 +51,16 @@ class Board:
 
         self._turn_color = RED
 
+
     def __getitem__(self, index): 
         return self.pieces[index]
+
 
     def apply_action(self, move, is_grow):
         """
         Apply the action to the board.
         """
-
+        
         if move is not None and not is_grow:
             origin, _, endpoint = move
             self._history.append(self.move(origin, endpoint))
@@ -65,6 +68,7 @@ class Board:
             self._history.append(self.grow())
         
         self._turn_color = -self._turn_color
+        self._turn_count += 1
 
 
     def undo_action(self, is_grow):
@@ -81,6 +85,7 @@ class Board:
             self.undo_grow()
 
         self._turn_color = -self._turn_color
+        self._turn_count -= 1
 
 
     def move(self, origin, endpoint):
@@ -109,6 +114,7 @@ class Board:
 
         return board_mutation         
 
+
     def undo_move(self):
         player_cells = self._red_frogs if self._turn_color == BLUE else self._blue_frogs
         latest_mutation = self._history.pop()
@@ -125,7 +131,6 @@ class Board:
             # Remove new frog from the list
             if new_state == -self._turn_color:
                 player_cells.remove(coord)
-            
 
 
     def grow(self):
@@ -147,6 +152,7 @@ class Board:
 
         return board_mutation
 
+
     def undo_grow(self):
         latest_mutation = self._history.pop()
 
@@ -155,25 +161,69 @@ class Board:
             x, y = coord
             self[x][y] = old_state #remove lily pad if added
         
+
+    # def generate_move_actions(self):
+    #     possible_actions = []
+    #     frogs_coord = self._red_frogs if self._turn_color == RED else self._blue_frogs
+    #     legal_directions = self.get_possible_directions()
+
+    #     for origin in frogs_coord:
+    #         for direction in legal_directions:
+
+    #             x, y, is_jump = self._get_destination(origin, direction)
+
+    #             if x is not None and y is not None:   
+    #                 possible_jumps = []   
+    #                 # if (y == 0 or y == 7) and not is_jump and (origin[1] != 0 and origin[1] != 7):
+    #                 #     continue # skip wall cell unless reached by a jump
+
+    #                 if is_jump:
+    #                     possible_jumps = self._discover_jumps(origin, [direction], (x, y))
+
+    #                 if (len(possible_jumps) == 0 and (y == 0 or y == 7) and (origin[1] != 0 and origin[1] != 7)) and x != 0 and x != 7:
+    #                     continue # skip wall cell
+                    
+    #                 elif direction[0] == 0: 
+    #                     possible_actions.append((origin, [direction], (x, y)))
+    #                 else:
+    #                     possible_actions.insert(0, (origin, [direction], (x,y)))  # prioritize moving forward
+
+    #                 possible_actions = possible_jumps + possible_actions # prioritize jumps
+        
+    #     return possible_actions
+
     def generate_move_actions(self):
         possible_actions = []
+        possible_jumps = []   
+        prioritized_actions = []
+        regular_actions = []
+        
         frogs_coord = self._red_frogs if self._turn_color == RED else self._blue_frogs
         legal_directions = self.get_possible_directions()
 
         for origin in frogs_coord:
             for direction in legal_directions:
+                new_jumps = []
+                x, y, is_jump = self._get_destination(origin, direction)
 
-                x, y, is_jump = self._get_destination(origin, direction) # get a valid destination
-
-                if x is not None and y is not None:       
-                    possible_actions.append((origin, [direction], (x, y)))
+                if x is not None and y is not None:   
 
                     if is_jump:
-                        possible_jumps = self._discover_jumps(origin, [direction], (x, y))
-                        possible_actions += possible_jumps
-        
+                        new_jumps = self._discover_jumps(origin, [direction], (x, y))
+                        possible_jumps += new_jumps
+
+                    if (len(possible_jumps) == 0 and (y == 0 or y == 7) and (origin[1] != 0 and origin[1] != 7)) and x != 0 and x != 7:
+                        continue # skip wall cell
+
+                    if direction[0] == 0: 
+                        regular_actions.append((origin, [direction], (x, y)))
+                    else:
+                        prioritized_actions.append((origin, [direction], (x, y))) # prioritize moving forward
+
+        possible_actions = possible_jumps + prioritized_actions + regular_actions + possible_actions
         return possible_actions
             
+
     def _discover_jumps(self, origin, l_direction, latest_pos):
         possible_jumps = []
 
@@ -196,6 +246,7 @@ class Board:
         
         return possible_jumps
 
+
     def _get_destination(self, origin, direction):
 
         is_jump = False
@@ -214,24 +265,32 @@ class Board:
         
         return None, None, None
     
+    
     @property
     def game_over(self) -> bool:
-        
-        if all(x == self.n - 1 for (x, y) in self._red_frogs):
+        if self._turn_count < 6:
+            return False
+
+        # Check if any red frog has not reached the last row
+        if self._turn_color == RED and all(x == self.n - 1 for (x, y) in self._red_frogs):
             return True
-        if all(x == 0 for (x, y) in self._blue_frogs):
+
+        # Check if any blue frog has not reached the first row
+        if self._turn_color == BLUE and all(x == 0 for (x, y) in self._blue_frogs):
             return True
-        
+
         return False
     
+
     def _within_board(self, x, y):
         return x >= 0 and x < self.n and y >= 0 and y < self.n
         
+
     def get_possible_directions(self):
         if self._turn_color == RED:
             return LEGAL_RED_DIRECTION
         else:
             return LEGAL_BLUE_DIRECTION
-    
+
 
 
