@@ -1,6 +1,5 @@
 import numpy as np
 
-# 2=red, -2=blue, 0=empty, 1=lily_pad
 ALL_DIRECTIONS = [(1,1),(1,0),(1,-1),(0,-1),(-1,-1),(-1,0),(-1,1),(0,1)]
 
 # list of 5 valid directions for each color
@@ -15,9 +14,9 @@ LEGAL_BLUE_DIRECTION = [(-1, -1), # upleft
                         (-1, 0), # up
                         (0, 1), # right
                         (0, -1)] # left
-RED = 2
-BLUE = -2
-LILYPAD = 1
+RED = 1
+BLUE = -1
+LILYPAD = 2
 EMPTY = 0
 
 class AgentBoard:
@@ -138,7 +137,7 @@ class AgentBoard:
         Grow lily pads around the player's frogs.
         """
         
-        player_cells = self._red_frogs if self._turn_color == 2 else self._blue_frogs
+        player_cells = self._red_frogs if self._turn_color == RED else self._blue_frogs
         board_mutation = []
 
         for cell in player_cells:
@@ -146,8 +145,8 @@ class AgentBoard:
                 nei_x, nei_y  = cell[0] + direction[0], cell[1] + direction[1]
 
                 # add lily pad if the cell is empty
-                if self._within_board(nei_x, nei_y) and self[nei_x][nei_y] == 0:
-                    self[nei_x][nei_y] = 1
+                if self._within_board(nei_x, nei_y) and self[nei_x][nei_y] == EMPTY:
+                    self[nei_x][nei_y] = LILYPAD
                     board_mutation.append(((nei_x, nei_y), EMPTY, LILYPAD))
 
         return board_mutation
@@ -272,11 +271,11 @@ class AgentBoard:
             return False
 
         # Check if any red frog has not reached the last row
-        if self._turn_color == RED and all(x == self.n - 1 for (x, y) in self._red_frogs):
+        if self._turn_color == -RED and all(x == self.n - 1 for (x, y) in self._red_frogs):
             return True
 
         # Check if any blue frog has not reached the first row
-        if self._turn_color == BLUE and all(x == 0 for (x, y) in self._blue_frogs):
+        if self._turn_color == -BLUE and all(x == 0 for (x, y) in self._blue_frogs):
             return True
 
         return False
@@ -291,6 +290,8 @@ class AgentBoard:
             return LEGAL_RED_DIRECTION
         else:
             return LEGAL_BLUE_DIRECTION
+        
+    
 
 
 

@@ -1,41 +1,6 @@
 import numpy as np
-
-# TODO
-PRIOR_WEIGHTS = np.array([-1.0,   # 0: avg_dist → farther frogs = worse
-                        1.2,   # 1: jumpable_ratio → more jump options = better
-                        -0.8,   # 2: spread_var → scattered frogs = worse
-                        0.8,   # 3: inverse_spread → tighter = better
-                        -1.5,   # 4: interaction = dist × spread → scattered + far = very bad
-                        -1.0,   # 5: blocked_ratio → blocked frogs = bad
-                        -0.5,   # 6: edge_ratio → edge frogs = mildly worse
-                        -0.6,   # 7: centrality → farther centroid from the middle of the board = worse
-                        1.0,   # 8: assistable_ratio → coordination = good
-                        1.5,   # 9: near_goal_ratio → threatening to win = very good
-                        0.4,   #10: half_board_pad_coverage → more lily pads = more mobility
-                        1.0,   #11: avg_adj_pads → short-term move options = good
-                        -1.2])    #12: grow_ratio → needing to grow = bad
-
-def eval_func(features, weights=PRIOR_WEIGHTS):
-    return np.dot(weights, features)
-
-def sigmoid_eval_func(features, weights=PRIOR_WEIGHTS):
-    score = np.dot(weights, features)
-    return 1 / (1 + np.exp(-score)) 
-
-def sigmoid_func(value):
-    return 1 / (1 + np.exp(-value)) 
-
-def eval_from_board(board, player=1, weights=PRIOR_WEIGHTS):
-    player_features = compute_features(board, player)
-    opp_features = compute_features(board, -player)
-    return eval_func(player_features) - eval_func(opp_features)
-
-RED = 1
-BLUE = -1
-PAD = 2
-EMPTY = 0
-
-N_FROGS = 6
+# from agent.ml.XGWrapper import XGWrapper as MLModel
+# from agent.ml.utils import dotdict
 
 DIRECTIONS = {1: [(1, 0), # down
                     (1, -1), # downleft
@@ -58,166 +23,277 @@ DIRECTIONS_TO_GOAL = {1: [(1, 0), # down
 DIRECTIONS_SIDEWAY = [(0, -1), # left
                     (0, 1)] # right
 
-def compute_features(board, player_color=1):
-    n = board.shape[0]
-    goal_row = 0 if player_color == -1 else n - 1
-    frog_positions = list(zip(*np.where(board == player_color))) # TODO can retrieve if this is part of Board class
-    frog_not_at_goal_positions = [(r, c) for r, c in frog_positions if r != goal_row]
-    frog_at_goal_positions = [(r, c) for r, c in frog_positions if r == goal_row]
-    n_frogs_not_at_goal = len(frog_not_at_goal_positions)
-    n_frogs_at_goal = N_FROGS - n_frogs_not_at_goal
+RED = 1
+BLUE = -1
+LILYPAD = 2
+EMPTY = 0
+N_FROGS = 6
 
-    # Distance to goal stats 
-    distances = [abs(r - goal_row) for r, _ in frog_positions]
-    avg_dist = np.mean(distances)
 
-    goal_pad_positions = []
-    unoccupied_goal_positions = []
-    for c in range(n):
-        if board[goal_row, c] == PAD:
-            goal_pad_positions.append((goal_row, c))
-            unoccupied_goal_positions.append((goal_row, c))
-        elif board[goal_row, c] == EMPTY:
-            unoccupied_goal_positions.append((goal_row, c))
+def simple_eval(state) -> float:
+    """
+    Evaluate the state by calculating the difference between RED and BLUE positions.
+    Returns a positive score if RED is in a better position, negative if BLUE is ahead.
+    """
+    def get_est_distance(target, curr_frog) -> int:
+        """
+        Estimate the distance between a frog and a target lily pad.
+        Accounts for diagonal moves which are more efficient.
+        """
+        verti_dist = abs(target[0] - curr_frog[0])
+        horiz_dist = abs(target[1] - curr_frog[1])
+        n_diag_moves = min(verti_dist, horiz_dist)
+        return verti_dist + horiz_dist - n_diag_moves
 
-    min_dists_to_goal = []
-    for frog_pos in frog_not_at_goal_positions:
-        min_dist_to_goal = 2*n
-        for r, c in unoccupied_goal_positions:
-            dist_to_goal = np.linalg.norm(np.array(frog_pos) - np.array((r, c))) 
-            if board[r, c] == EMPTY:
-                dist_to_goal += 1 # account for grow action 
-            if dist_to_goal < min_dist_to_goal:
-                min_dist_to_goal = dist_to_goal
-        min_dists_to_goal.append(min_dist_to_goal)
-    avg_min_dist_to_goal = sum(min_dists_to_goal) / N_FROGS
+    def calculate_feature_score(remaining_frogs, color) -> tuple:
+        """
+        Calculate jump opportunities and blocked frogs for a player.
+        Returns (block_score, jump_score) tuple.
+        """
+        jump_score = 0
+        block_score = 0
 
-    # Setup counters     
-    jumpable = blocked = edge = assistable = near_goal = reachable_pads = grow_needed = 0
-    n_blocked_target_dirs = n_possible_target_jumps = 0
-    n_sideway_moves = n_sideway_jumps = 0
+        # Define legal directions based on player color
+        if color == BLUE:
+            legal_directions = [(-1, 0), (-1, -1), (-1, 1)]  # Red moves down
+        else:
+            legal_directions = [(1, 0), (1, -1), (1, 1)]  # Blue moves up
 
-    for r, c in frog_not_at_goal_positions:
-        has_jump = False
-        is_blocked = False
-        pad_nearby = False
+        for frog in remaining_frogs:
+            is_blocked = True
+            for direction in legal_directions:
+                _, _, is_jump = state._get_destination(frog, direction)
 
-        if c in [0, n - 1]:
-            edge += 1
-        if abs(r - goal_row) <= 2:
-            near_goal += 1
+                if is_jump:  # the frog can jump
+                    jump_score += 1
 
-        for dr, dc in DIRECTIONS_TO_GOAL[player_color]:
-            r1, c1 = r + dr, c + dc
-            r2, c2 = r + 2 * dr, c + 2 * dc
-
-            if 0 <= r1 < n and 0 <= c1 < n:
-                if board[r1, c1] == PAD:
-                    pad_nearby = True
-                    reachable_pads += 1
-
-                if board[r1, c1] in [-player_color, player_color] \
-                    and not (0 <= r2 < n and 0 <= c2 < n): 
-                    is_blocked = True
-                    n_blocked_target_dirs += 1
-                
-                r_back, c_back = r - dr, c - dc
-                if 0 <= r_back < n and 0 <= c_back < n:
-                    if board[r_back, c_back] == player_color and board[r1, c1] == PAD:
-                        assistable += 1
-
-            if 0 <= r2 < n and 0 <= c2 < n:
-                if board[r1, c1] in [-player_color, player_color]:
-                    if board[r2, c2] == PAD:
-                        pad_nearby = True
-                        reachable_pads += 1
-                        has_jump = True
-                        n_possible_target_jumps += 1
-                    else:
-                        is_blocked = True
-                        n_blocked_target_dirs += 1
-
-        if has_jump:
-            jumpable += 1
-        if is_blocked:
-            blocked += 1
-        if not pad_nearby:
-            grow_needed += 1
-
-    for r, c in frog_at_goal_positions:
-        for dr, dc in DIRECTIONS_SIDEWAY:
-            r1, c1 = r + dr, c + dc
-            r2, c2 = r + 2 * dr, c + 2 * dc
+                elif is_jump is not None:  # the frog can move
+                    is_blocked = False
             
-            if 0 <= r1 < n and 0 <= c1 < n:
-                if board[r1, c1] == PAD:
-                    n_sideway_moves += 1
+            if is_blocked:
+                block_score += 1
 
-            if 0 <= r2 < n and 0 <= c2 < n:
-                if board[r1, c1] in [-player_color, player_color] and board[r2, c2] == PAD:
-                    n_sideway_jumps += 1
+        return block_score, jump_score
 
-    # Lily pad stats
-    mid_row = int(np.floor((n-1)/2)) + 1
-    if player_color == RED:
-        half_board_total_pads = np.sum(board[mid_row:, :] == PAD)
-    else:
-        half_board_total_pads = np.sum(board[:mid_row, :] == PAD)
-    half_board_pad_coverage = half_board_total_pads / (n * n / 2)
-    avg_reachable_pads = reachable_pads / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    grow_needed_ratio = grow_needed / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
+    # Feature 1: Number of frogs on the target lily pads
+    finished_red = [frog for frog in state._red_frogs if frog[0] == 7]
+    finished_blue = [frog for frog in state._blue_frogs if frog[0] == 0]
+    finished_diff = len(finished_red) - len(finished_blue)
 
-    goal_pad_ratio = len(goal_pad_positions) / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-
-    # Other ratios
-    jumpable_ratio = jumpable / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    blocked_ratio = blocked / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    edge_ratio = edge / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    near_goal_ratio = near_goal / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    assistable_ratio = assistable / n_frogs_not_at_goal if n_frogs_not_at_goal else 0  
+    # convert number to range [-1, 1]
+    finished_diff = (finished_diff - 0)/N_FROGS 
     
-    target_jump_ratio = n_possible_target_jumps / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    target_blocked_ratio = n_blocked_target_dirs / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    sideway_move_ratio = n_sideway_moves / n_frogs_at_goal if n_frogs_at_goal else 0
-    sideway_jump_ratio = n_sideway_jumps / n_frogs_at_goal  if n_frogs_at_goal else 0
+    # Remaining frogs (not at goal)
+    remaining_red = [frog for frog in state._red_frogs if frog not in finished_red]
+    remaining_blue = [frog for frog in state._blue_frogs if frog not in finished_blue]
+    
+    # Feature 2: Jump opportunities, Feature 5: Blocked frogs
+    block_red, jump_red = calculate_feature_score(remaining_red, RED)
+    block_blue, jump_blue = calculate_feature_score(remaining_blue, BLUE)
+    jump_score_diff = jump_red - jump_blue
+    block_score_diff = block_red - block_blue
 
-    # Spread and centrality
-    if frog_not_at_goal_positions:
-        rows, cols = zip(*frog_positions)
-        var_row = np.var(rows)
-        var_col = np.var(cols)
-        spread_var = var_row + var_col
-        spread_rms = np.sqrt(spread_var)
+    # Feature 3: Distance to target lily pads (lower is better)
+    total_dis_red = sum(get_est_distance((7, frog[1]), frog) for frog in remaining_red)
+    total_dis_blue = sum(get_est_distance((0, frog[1]), frog) for frog in remaining_blue)
+    total_dis_diff = total_dis_red - total_dis_blue
+   
+    # Feature 4: Frogs clustering (lower is better)
+    # Only calculate if there are remaining frogs
+    internal_dis_diff = 0
+    if remaining_red:
+        one_red_frog = remaining_red[0]
+        internal_red_dist = sum(get_est_distance(one_red_frog, frog) for frog in remaining_red if frog != one_red_frog)
     else:
-        cols = []
-        spread_var = 0.0
-        spread_rms = 1.0
+        internal_red_dist = 0
+        
+    if remaining_blue:
+        one_blue_frog = remaining_blue[0]
+        internal_blue_dist = sum(get_est_distance(one_blue_frog, frog) for frog in remaining_blue if frog != one_blue_frog)
+    else:
+        internal_blue_dist = 0
+        
+    internal_dis_diff = internal_red_dist - internal_blue_dist
 
-    inverse_spread = 1 / (1 + spread_rms)
-    interaction = avg_dist * spread_rms
-    centrality = np.mean([abs(col - (n-1)/2) for col in cols]) if cols else 0
+    # Calculate final score with weights
+    weights = [1.0,    # Finished frogs (most important)
+               0.37,    # Jump opportunities (good to have options)
+               -0.62,    # Distance to goal
+               -0.1,    # Clustering
+              -0.12]       # Blocked frogs
+    
+    features = [finished_diff, jump_score_diff, total_dis_diff, internal_dis_diff, block_score_diff]
+    
+    # Apply weights to features
+    score = sum(w * f for w, f in zip(weights, features))
 
-    return np.array([
-        avg_dist,             # 0
-        jumpable_ratio,       # 1
-        spread_var,           # 2
-        inverse_spread,       # 3
-        interaction,          # 4
-        blocked_ratio,        # 5
-        edge_ratio,           # 6
-        centrality,           # 7
-        assistable_ratio,     # 8
-        near_goal_ratio,      # 9
-        half_board_pad_coverage,         # 10
-        avg_reachable_pads,         # 11
-        grow_needed_ratio,           # 12
-        target_jump_ratio,     # 13
-        target_blocked_ratio,       # 14
-        sideway_move_ratio,      # 15
-        sideway_jump_ratio,      # 16
-        n_frogs_at_goal,       # 17
-        goal_pad_ratio,         # 18
-        avg_min_dist_to_goal,   # 19
-             # 20
-              # 21
-    ])
+    return np.tanh(score)
+
+def simple_alter_eval2(state) -> float:
+    """
+    Evaluate the state by calculating the difference between RED and BLUE positions.
+    Returns a positive score if RED is in a better position, negative if BLUE is ahead.
+    """
+    def get_est_distance(target, curr_frog) -> int:
+        """
+        Estimate the distance between a frog and a target lily pad.
+        Accounts for diagonal moves which are more efficient.
+        """
+        verti_dist = abs(target[0] - curr_frog[0])
+        horiz_dist = abs(target[1] - curr_frog[1])
+        n_diag_moves = min(verti_dist, horiz_dist)
+        return verti_dist + horiz_dist - n_diag_moves
+
+    def calculate_feature_score(remaining_frogs, color) -> tuple:
+        """
+        Calculate jump opportunities and blocked frogs for a player.
+        Returns (block_score, jump_score) tuple.
+        """
+        jump_score = 0
+        block_score = 0
+
+        # Define legal directions based on player color
+        if color == BLUE:
+            legal_directions = [(-1, 0), (-1, -1), (-1, 1)]  # Red moves down
+        else:
+            legal_directions = [(1, 0), (1, -1), (1, 1)]  # Blue moves up
+
+        for frog in remaining_frogs:
+            is_blocked = True
+            for direction in legal_directions:
+                _, _, is_jump = state._get_destination(frog, direction)
+
+                if is_jump:  # the frog can jump
+                    jump_score += 1
+
+                elif is_jump is not None:  # the frog can move
+                    is_blocked = False
+            
+            if is_blocked:
+                block_score += 1
+
+        return block_score, jump_score
+
+    # Feature 1: Number of frogs on the target lily pads
+    finished_red = [frog for frog in state._red_frogs if frog[0] == 7]
+    finished_blue = [frog for frog in state._blue_frogs if frog[0] == 0]
+    finished_diff = len(finished_red) - len(finished_blue)
+    
+    # Remaining frogs (not at goal)
+    remaining_red = [frog for frog in state._red_frogs if frog not in finished_red]
+    remaining_blue = [frog for frog in state._blue_frogs if frog not in finished_blue]
+    
+    # Feature 2: Jump opportunities, Feature 5: Blocked frogs
+    block_red, jump_red = calculate_feature_score(remaining_red, RED)
+    block_blue, jump_blue = calculate_feature_score(remaining_blue, BLUE)
+    jump_score_diff = jump_red - jump_blue
+    block_score_diff = block_red - block_blue
+
+    # Feature 3: Distance to target lily pads (lower is better)
+    total_dis_red = sum(get_est_distance((7, frog[1]), frog) for frog in remaining_red)
+    total_dis_blue = sum(get_est_distance((0, frog[1]), frog) for frog in remaining_blue)
+    total_dis_diff = total_dis_red - total_dis_blue
+   
+    # Feature 4: Frogs clustering (lower is better)
+    # Only calculate if there are remaining frogs
+    internal_dis_diff = 0
+    if remaining_red:
+        one_red_frog = remaining_red[0]
+        internal_red_dist = sum(get_est_distance(one_red_frog, frog) for frog in remaining_red if frog != one_red_frog)
+    else:
+        internal_red_dist = 0
+        
+    if remaining_blue:
+        one_blue_frog = remaining_blue[0]
+        internal_blue_dist = sum(get_est_distance(one_blue_frog, frog) for frog in remaining_blue if frog != one_blue_frog)
+    else:
+        internal_blue_dist = 0
+        
+    internal_dis_diff = internal_red_dist - internal_blue_dist
+
+    # Calculate final score with weights
+    weights = [5,    # Finished frogs (most important)
+               0.3,    # Jump opportunities (good to have options)
+               -2.0,    # Distance to goal
+               -0.1,    # Clustering
+              -0.1]       # Blocked frogs
+    
+    features = [finished_diff, jump_score_diff, total_dis_diff, internal_dis_diff, block_score_diff]
+    
+    # Apply weights to features
+    score = sum(w * f for w, f in zip(weights, features))
+
+    return score
+# def ml_eval() -> float:
+
+#     ml2 = MLModel()
+#     ml2.load_checkpoint('./temp_xg2/','best.pkl')
+#     args_ml2 = dotdict({'numMCTSSims': 200, 'cpuct':2.5, 
+#                         'grow_multiplier': 1.5,
+#                         'target_move_multiplier': 1.75,
+#                         'target_jump_multiplier': 2.5,
+#                         'target_opp_jump_multiplier': 5})
+
+def simple_alter_eval(state) -> float:
+
+    def get_est_distance(target, curr_frog) -> int:
+        """
+        Estimate the distance between a frog and a target lily pad.
+        """
+        verti_dist = abs(target[0] - curr_frog[0])
+        horiz_dist = abs(target[1] - curr_frog[1])
+        n_diag_moves = min(verti_dist, horiz_dist)
+        return verti_dist + horiz_dist - n_diag_moves
+
+
+    def jump_point(remaining_red, remaining_blue, color) -> float:
+        """
+        Calculate the safety penalty for a given set of frogs.
+        """
+        score = 0
+
+        if color == BLUE:
+            player_frogs = remaining_red
+            legal_directions = [(-1, -1),(-1, 1),(1, 0)]
+        else:
+            player_frogs = remaining_blue
+            legal_directions = [(1, -1),(1, 1),(1, 0)]
+
+        for frog in player_frogs:
+            for direction in legal_directions:
+                _, _, is_jump = state._get_destination(frog, direction)
+
+                if (is_jump):
+                    score += 1
+
+        return score
+
+    # Feature 1: Number of frogs on the target lily pads -- want to maximize this
+    finished_red = [frog for frog in state._red_frogs if frog[0] == 7]
+    finished_blue = [frog for frog in state._blue_frogs if frog[0] == 0]
+    finished_diff = len(finished_red) - len(finished_blue)
+    
+    # Feature 2: Score for the number of jumps you can make -- want to maximize this
+    remaining_red = [frog for frog in state._red_frogs if frog not in finished_red]
+    remaining_blue = [frog for frog in state._blue_frogs if frog not in finished_blue]
+    jump_point_red = jump_point(remaining_red, remaining_blue, RED)
+    jump_point_blue = jump_point(remaining_red, remaining_blue, BLUE)
+    vulnerable_diff = jump_point_red - jump_point_blue
+
+    # Feature 3: Sum of the distance of the frogs to the nearest target lily pads -- want to reduce this
+    total_dis_red = sum(get_est_distance((7, frog[1]), frog) for frog in state._red_frogs)
+    total_dis_blue = sum(get_est_distance((0, frog[1]), frog) for frog in state._blue_frogs)
+    total_dis_diff = total_dis_red - total_dis_blue
+
+    # Feature 4: Total distance of 6 frogs together -- want to reduce this
+    one_frog = next(iter(state._red_frogs)) if state._turn_color == RED else next(iter(state._blue_frogs))
+    internal_red_frog_dist = [get_est_distance(one_frog, frog) for frog in state._red_frogs if frog != one_frog]
+    internal_blue_frog_dist = [get_est_distance(one_frog, frog) for frog in state._blue_frogs if frog != one_frog]
+    internal_dis_diff = sum(internal_red_frog_dist) - sum(internal_blue_frog_dist)
+
+    # Calculate scores for RED and BLUE
+    weights = [2, 0.3, -2, 0]  # Weights for each feature
+    diff_score = [finished_diff, vulnerable_diff, total_dis_diff, internal_dis_diff]
+    score = sum(w * s for w, s in zip(weights, diff_score))
+
+    return score
