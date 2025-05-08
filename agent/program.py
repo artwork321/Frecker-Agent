@@ -4,11 +4,12 @@ import os
 import copy
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
-from referee.game.constants import *    
+from agent.constants import *    
 import math
 from agent.state import *
-from agent.evaluation_functions import simple_eval
-import pickle
+from agent.evaluation_functions import *
+import json
+
 
 class Agent:
     """
@@ -66,14 +67,13 @@ class Agent:
                 return action
 
             # Dynamically adjust the cut-off depth for minimax
-            if referee["time_remaining"] < 30: cut_off += 0
-            elif is_grow or (origin[0] >= 2 and origin[0] <= 5): cut_off += 2
+            if (is_grow or (origin[0] >= 2 and origin[0] <= 5)) and referee["time_remaining"] >= 30: cut_off += ADDITIONAL_DEPTH
 
             action_values[action] = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
             self._internal_state.undo_action(is_grow=is_grow)
 
         print("Action Values: ", action_values)
-        
+
         action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
 
         return action
@@ -145,7 +145,8 @@ class Agent:
                 
 
     def _evaluate(self) -> float:
-        score = simple_eval(self._internal_state)
+        # score = simple_eval(self._internal_state)
+        score  = xgboost_eval(self._internal_state)
         return score
         
 
@@ -205,4 +206,4 @@ class Agent:
         
         with open(filename, "wb") as f:
             print(f"Saving game state to {filename}")
-            pickle.dump(state_data, f)
+            json.dump(state_data, f)

@@ -1,31 +1,6 @@
 import numpy as np
-
-DIRECTIONS = {1: [(1, 0), # down
-                    (1, -1), # downleft
-                    (1, 1), # downright
-                    (0, -1), # left
-                    (0, 1)], # right
-                -1: [(-1, 0), # up
-                    (-1, -1), # upleft
-                    (-1, 1), # upright
-                    (0, -1), # left
-                    (0, 1)]} # right
-
-DIRECTIONS_TO_GOAL = {1: [(1, 0), # down
-                        (1, -1), # downleft
-                        (1, 1)], # downright
-                    -1: [(-1, 0), # up
-                        (-1, -1), # upleft
-                        (-1, 1)]} # upright
-
-DIRECTIONS_SIDEWAY = [(0, -1), # left
-                    (0, 1)] # right
-
-RED = 1
-BLUE = -1
-LILYPAD = 2
-EMPTY = 0
-N_FROGS = 6
+from agent.json_xgboost import JSON_XGBoost
+from agent.constants import *
 
 
 def simple_eval(state) -> float:
@@ -54,10 +29,10 @@ def simple_eval(state) -> float:
         # Define legal directions based on player color
         if color == BLUE:
             relax_row = 6
-            legal_directions = [(-1, 0), (-1, -1), (-1, 1)]  # Red moves down
+            legal_directions = DIRECTIONS_TO_GOAL[BLUE] 
         else:
             relax_row = 1
-            legal_directions = [(1, 0), (1, -1), (1, 1)]  # Blue moves up
+            legal_directions = DIRECTIONS_TO_GOAL[RED] 
 
         for frog in remaining_frogs:
             is_blocked = True
@@ -121,7 +96,7 @@ def simple_eval(state) -> float:
                0.37,    # Jump opportunities (good to have options)
                -0.65,    # Distance to goal (very important)
                -0.1,    # Clustering (want frogs to be together)
-              -0.12]       # Blocked frogs (not want frogs to have no way to move forward)
+              -0.1]       # Blocked frogs (not want frogs to have no way to move forward)
     
     features = [finished_diff, jump_score_diff, total_dis_diff, internal_dis_diff, block_score_diff]
     
@@ -155,9 +130,9 @@ def simple_alter_eval(state) -> float:
 
         # Define legal directions based on player color
         if color == BLUE:
-            legal_directions = [(-1, 0), (-1, -1), (-1, 1)]  # Red moves down
+            legal_directions = DIRECTIONS_TO_GOAL[BLUE]
         else:
-            legal_directions = [(1, 0), (1, -1), (1, 1)]  # Blue moves up
+            legal_directions = DIRECTIONS_TO_GOAL[RED]
 
         for frog in remaining_frogs:
             is_blocked = True
@@ -217,7 +192,7 @@ def simple_alter_eval(state) -> float:
                0.3,    # Jump opportunities (good to have options)
                -2.0,    # Distance to goal
                -0.1,    # Clustering
-              -0.1]       # Blocked frogs
+              -0.05]       # Blocked frogs
     
     features = [finished_diff, jump_score_diff, total_dis_diff, internal_dis_diff, block_score_diff]
     
@@ -225,3 +200,7 @@ def simple_alter_eval(state) -> float:
     score = sum(w * f for w, f in zip(weights, features))
 
     return score
+
+def xgboost_eval(state) -> float:
+    model = JSON_XGBoost()
+    return model.predict(board=state.pieces)

@@ -1,23 +1,5 @@
 import numpy as np
-
-ALL_DIRECTIONS = [(1,1),(1,0),(1,-1),(0,-1),(-1,-1),(-1,0),(-1,1),(0,1)]
-
-# list of 5 valid directions for each color
-LEGAL_RED_DIRECTION = [(1, -1), # downleft
-                        (1, 1), # downright
-                        (1, 0), # down
-                       (0, 1), # right
-                       (0, -1)] # left
-
-LEGAL_BLUE_DIRECTION = [(-1, -1), # upleft
-                        (-1, 1), # upright
-                        (-1, 0), # up
-                        (0, 1), # right
-                        (0, -1)] # left
-RED = 1
-BLUE = -1
-LILYPAD = 2
-EMPTY = 0
+from agent.constants import *
 
 class AgentBoard:
 
@@ -257,9 +239,9 @@ class AgentBoard:
 
     def get_possible_directions(self):
         if self._turn_color == RED:
-            return LEGAL_RED_DIRECTION
+            return DIRECTIONS[RED]
         else:
-            return LEGAL_BLUE_DIRECTION
+            return DIRECTIONS[BLUE]
         
     
 

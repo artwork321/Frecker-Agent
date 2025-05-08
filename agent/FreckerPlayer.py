@@ -2,7 +2,7 @@
 # Project Part B: Game Playing Agent
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
-from referee.game.constants import *    
+from agent.constants import *    
 import math
 from agent.state import *
 import random
@@ -496,7 +496,7 @@ class SlowMiniMaxAgent:
         depth += 1
 
         # Base case: game over or depth limit reached
-        if state.game_over or depth >= DEPTH_LIMIT:
+        if state.game_over or depth >= 3:
             # if state.game_over:
                 # self.save_complete_game()
             return self._evaluate(state)
