@@ -1,14 +1,13 @@
 # COMP30024 Artificial Intelligence, Semester 1 2025
 # Project Part B: Game Playing Agent
 import os
-
 import copy
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
 from referee.game.constants import *    
 import math
 from agent.state import *
-from agent.eval import simple_eval
+from agent.evaluation_functions import simple_eval
 import pickle
 
 class Agent:
@@ -180,34 +179,34 @@ class Agent:
         # self.save_game_state()
 
 
-    # def save_game_state(self, **referee: dict):
-    #     """
-    #     Saves the current game state.
-    #     """
-    #     state_copy = copy.deepcopy(self._internal_state)
+    def save_game_state(self, **referee: dict):
+        """
+        Saves the current game state.
+        """
+        state_copy = copy.deepcopy(self._internal_state)
 
-    #     self.game_states.append(state_copy)
+        self.game_states.append(state_copy)
 
-    #     if self._internal_state.game_over:
-    #         print("Game Over")
-    #         self.save_complet_game()
+        if self._internal_state.game_over:
+            print("Game Over")
+            self.save_complet_game()
 
 
-    # def save_complet_game(self, save_dir="game_states"):
-    #     os.makedirs(save_dir, exist_ok=True)
+    def save_complet_game(self, save_dir="game_states"):
+        os.makedirs(save_dir, exist_ok=True)
 
-    #     state_data = {
-    #         "game_states": self.game_states,
-    #         "winner": -self._internal_state._turn_color,
-    #     }
+        state_data = {
+            "game_states": self.game_states,
+            "winner": -self._internal_state._turn_color,
+        }
 
-    #     # Find the next available file number
-    #     existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and f.endswith(".pkl")]
-    #     file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
-    #     next_file_number = max(file_numbers) + 1 if file_numbers else 1
+        # Find the next available file number
+        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and f.endswith(".pkl")]
+        file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
+        next_file_number = max(file_numbers) + 1 if file_numbers else 1
         
-    #     filename = f"{save_dir}/game_state_{next_file_number}.pkl"
+        filename = f"{save_dir}/game_state_{next_file_number}.pkl"
         
-    #     with open(filename, "wb") as f:
-    #         print(f"Saving game state to {filename}")
-    #         pickle.dump(state_data, f)
+        with open(filename, "wb") as f:
+            print(f"Saving game state to {filename}")
+            pickle.dump(state_data, f)

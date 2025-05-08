@@ -1,6 +1,4 @@
 import numpy as np
-# from agent.ml.XGWrapper import XGWrapper as MLModel
-# from agent.ml.utils import dotdict
 
 DIRECTIONS = {1: [(1, 0), # down
                     (1, -1), # downleft
@@ -224,15 +222,6 @@ def simple_alter_eval2(state) -> float:
     score = sum(w * f for w, f in zip(weights, features))
 
     return score
-# def ml_eval() -> float:
-
-#     ml2 = MLModel()
-#     ml2.load_checkpoint('./temp_xg2/','best.pkl')
-#     args_ml2 = dotdict({'numMCTSSims': 200, 'cpuct':2.5, 
-#                         'grow_multiplier': 1.5,
-#                         'target_move_multiplier': 1.75,
-#                         'target_jump_multiplier': 2.5,
-#                         'target_opp_jump_multiplier': 5})
 
 def simple_alter_eval(state) -> float:
 

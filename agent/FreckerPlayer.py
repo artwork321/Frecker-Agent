@@ -7,7 +7,7 @@ import math
 from agent.state import *
 import random
 from referee.game.board import Board
-from agent.eval import *
+from agent.evaluation_functions import *
 
 # Board state for slow minimax and random agent
 class SlowBoardState:
@@ -949,10 +949,7 @@ class MiniMaxAgent:
 
 
     def _evaluate(self) -> float:
-
-        # score = eval_from_board(self._internal_state.pieces)
         score = simple_alter_eval2(self._internal_state)
-
         return score
 
 
