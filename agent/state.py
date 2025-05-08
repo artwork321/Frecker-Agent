@@ -161,36 +161,6 @@ class AgentBoard:
             self[x][y] = old_state #remove lily pad if added
         
 
-    # def generate_move_actions(self):
-    #     possible_actions = []
-    #     frogs_coord = self._red_frogs if self._turn_color == RED else self._blue_frogs
-    #     legal_directions = self.get_possible_directions()
-
-    #     for origin in frogs_coord:
-    #         for direction in legal_directions:
-
-    #             x, y, is_jump = self._get_destination(origin, direction)
-
-    #             if x is not None and y is not None:   
-    #                 possible_jumps = []   
-    #                 # if (y == 0 or y == 7) and not is_jump and (origin[1] != 0 and origin[1] != 7):
-    #                 #     continue # skip wall cell unless reached by a jump
-
-    #                 if is_jump:
-    #                     possible_jumps = self._discover_jumps(origin, [direction], (x, y))
-
-    #                 if (len(possible_jumps) == 0 and (y == 0 or y == 7) and (origin[1] != 0 and origin[1] != 7)) and x != 0 and x != 7:
-    #                     continue # skip wall cell
-                    
-    #                 elif direction[0] == 0: 
-    #                     possible_actions.append((origin, [direction], (x, y)))
-    #                 else:
-    #                     possible_actions.insert(0, (origin, [direction], (x,y)))  # prioritize moving forward
-
-    #                 possible_actions = possible_jumps + possible_actions # prioritize jumps
-        
-    #     return possible_actions
-
     def generate_move_actions(self):
         possible_actions = []
         possible_jumps = []   

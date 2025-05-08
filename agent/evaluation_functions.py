@@ -53,14 +53,16 @@ def simple_eval(state) -> float:
 
         # Define legal directions based on player color
         if color == BLUE:
+            relax_row = 6
             legal_directions = [(-1, 0), (-1, -1), (-1, 1)]  # Red moves down
         else:
+            relax_row = 1
             legal_directions = [(1, 0), (1, -1), (1, 1)]  # Blue moves up
 
         for frog in remaining_frogs:
             is_blocked = True
             for direction in legal_directions:
-                _, _, is_jump = state._get_destination(frog, direction)
+                x, _, is_jump = state._get_destination(frog, direction)
 
                 if is_jump:  # the frog can jump
                     jump_score += 1
@@ -68,7 +70,8 @@ def simple_eval(state) -> float:
                 elif is_jump is not None:  # the frog can move
                     is_blocked = False
             
-            if is_blocked:
+            # do not care about the blocked if frogs are very close to the goal
+            if is_blocked and frog[0] != relax_row and len(remaining_frogs) >= 2:
                 block_score += 1
 
         return block_score, jump_score
@@ -116,9 +119,9 @@ def simple_eval(state) -> float:
     # Calculate final score with weights
     weights = [1.0,    # Finished frogs (most important)
                0.37,    # Jump opportunities (good to have options)
-               -0.62,    # Distance to goal
-               -0.1,    # Clustering
-              -0.12]       # Blocked frogs
+               -0.65,    # Distance to goal (very important)
+               -0.1,    # Clustering (want frogs to be together)
+              -0.12]       # Blocked frogs (not want frogs to have no way to move forward)
     
     features = [finished_diff, jump_score_diff, total_dis_diff, internal_dis_diff, block_score_diff]
     
@@ -127,7 +130,7 @@ def simple_eval(state) -> float:
 
     return np.tanh(score)
 
-def simple_alter_eval2(state) -> float:
+def simple_alter_eval(state) -> float:
     """
     Evaluate the state by calculating the difference between RED and BLUE positions.
     Returns a positive score if RED is in a better position, negative if BLUE is ahead.
@@ -220,69 +223,5 @@ def simple_alter_eval2(state) -> float:
     
     # Apply weights to features
     score = sum(w * f for w, f in zip(weights, features))
-
-    return score
-
-def simple_alter_eval(state) -> float:
-
-    def get_est_distance(target, curr_frog) -> int:
-        """
-        Estimate the distance between a frog and a target lily pad.
-        """
-        verti_dist = abs(target[0] - curr_frog[0])
-        horiz_dist = abs(target[1] - curr_frog[1])
-        n_diag_moves = min(verti_dist, horiz_dist)
-        return verti_dist + horiz_dist - n_diag_moves
-
-
-    def jump_point(remaining_red, remaining_blue, color) -> float:
-        """
-        Calculate the safety penalty for a given set of frogs.
-        """
-        score = 0
-
-        if color == BLUE:
-            player_frogs = remaining_red
-            legal_directions = [(-1, -1),(-1, 1),(1, 0)]
-        else:
-            player_frogs = remaining_blue
-            legal_directions = [(1, -1),(1, 1),(1, 0)]
-
-        for frog in player_frogs:
-            for direction in legal_directions:
-                _, _, is_jump = state._get_destination(frog, direction)
-
-                if (is_jump):
-                    score += 1
-
-        return score
-
-    # Feature 1: Number of frogs on the target lily pads -- want to maximize this
-    finished_red = [frog for frog in state._red_frogs if frog[0] == 7]
-    finished_blue = [frog for frog in state._blue_frogs if frog[0] == 0]
-    finished_diff = len(finished_red) - len(finished_blue)
-    
-    # Feature 2: Score for the number of jumps you can make -- want to maximize this
-    remaining_red = [frog for frog in state._red_frogs if frog not in finished_red]
-    remaining_blue = [frog for frog in state._blue_frogs if frog not in finished_blue]
-    jump_point_red = jump_point(remaining_red, remaining_blue, RED)
-    jump_point_blue = jump_point(remaining_red, remaining_blue, BLUE)
-    vulnerable_diff = jump_point_red - jump_point_blue
-
-    # Feature 3: Sum of the distance of the frogs to the nearest target lily pads -- want to reduce this
-    total_dis_red = sum(get_est_distance((7, frog[1]), frog) for frog in state._red_frogs)
-    total_dis_blue = sum(get_est_distance((0, frog[1]), frog) for frog in state._blue_frogs)
-    total_dis_diff = total_dis_red - total_dis_blue
-
-    # Feature 4: Total distance of 6 frogs together -- want to reduce this
-    one_frog = next(iter(state._red_frogs)) if state._turn_color == RED else next(iter(state._blue_frogs))
-    internal_red_frog_dist = [get_est_distance(one_frog, frog) for frog in state._red_frogs if frog != one_frog]
-    internal_blue_frog_dist = [get_est_distance(one_frog, frog) for frog in state._blue_frogs if frog != one_frog]
-    internal_dis_diff = sum(internal_red_frog_dist) - sum(internal_blue_frog_dist)
-
-    # Calculate scores for RED and BLUE
-    weights = [2, 0.3, -2, 0]  # Weights for each feature
-    diff_score = [finished_diff, vulnerable_diff, total_dis_diff, internal_dis_diff]
-    score = sum(w * s for w, s in zip(weights, diff_score))
 
     return score

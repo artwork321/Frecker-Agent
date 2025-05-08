@@ -420,9 +420,9 @@ class GreedyAgent:
         state_copy = copy.deepcopy(self._internal_state)
         self.game_states.append(state_copy)
 
-        # if self._internal_state.game_over:
-        #     print("Game Over")
-        #     self.save_complete_game()
+        if self._internal_state.game_over:
+            print("Game Over")
+            self.save_complete_game()
 
     def save_complete_game(self, save_dir="game_states"):
         """
@@ -534,17 +534,7 @@ class SlowMiniMaxAgent:
             return min_eval
                 
     def _evaluate(self, state: SlowBoardState) -> float:
-        """
-        Heuristic evaluation of the current board state.
 
-        Strategy: Linear weighted sum of features.
-        Features:
-            1. Number of frogs on the target lily pads.
-            2. Piece protection (number of frogs adjacent to another frog and protected).
-            3. Negative sum of the distance of the frogs to the nearest target lily pads.
-            4. Move count (mobility).
-            5. Central Control.
-        """
         def get_est_distance(target: Coord, curr_frog: Coord) -> int:
             """
             Estimate the distance between a frog and a target lily pad.
@@ -685,9 +675,9 @@ class RandomAgent:
         action = possible_actions[random.randint(0, len(possible_actions) - 1)]
         
         # Check if game would be over after this action
-        new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
-        if new_state.game_over:
-            self._internal_state = new_state
+        # new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
+        # if new_state.game_over:
+        #     self._internal_state = new_state
             # self.save_game_state()
             
         return action
@@ -766,9 +756,10 @@ class SmarterRandomAgent:
             action = possible_actions[random.randint(0, len(possible_actions) - 1)]
         
         # Check if game would be over after this action
-        new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
-        if new_state.game_over:
-            self._internal_state = new_state
+
+        # new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
+        # if new_state.game_over:
+        #     self._internal_state = new_state
             # self.save_game_state()
             
         return action
@@ -788,7 +779,8 @@ class SmarterRandomAgent:
 
         if self._internal_state.game_over:
             print("Game Over")
-            # self.save_complete_game()
+            self.save_complete_game()
+
 
     def save_complete_game(self, save_dir="game_states"):
         """
@@ -876,9 +868,6 @@ class MiniMaxAgent:
             self._internal_state.undo_action(is_grow=is_grow)
 
         action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
-        
-        # action_values = dict(sorted(action_values.items(), key=lambda item: item[1], reverse=self._is_maximizer))
-        print("Action Values: ", action_values)
 
         return action
 
@@ -947,9 +936,8 @@ class MiniMaxAgent:
             return min_eval
                 
 
-
     def _evaluate(self) -> float:
-        score = simple_alter_eval2(self._internal_state)
+        score = simple_alter_eval(self._internal_state)
         return score
 
 
@@ -979,6 +967,7 @@ class MiniMaxAgent:
         print("Space Remaining", referee["space_remaining"])
         # self.save_game_state()
         
+
     def save_game_state(self):
         """
         Saves the current game state.

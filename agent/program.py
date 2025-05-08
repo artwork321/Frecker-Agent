@@ -72,10 +72,9 @@ class Agent:
             action_values[action] = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
             self._internal_state.undo_action(is_grow=is_grow)
 
-        action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
-        
-        # action_values = dict(sorted(action_values.items(), key=lambda item: item[1], reverse=self._is_maximizer))
         print("Action Values: ", action_values)
+        
+        action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
 
         return action
 
@@ -146,10 +145,7 @@ class Agent:
                 
 
     def _evaluate(self) -> float:
-        
-        # score = unified_simple_eval(self._internal_state)
         score = simple_eval(self._internal_state)
-            
         return score
         
 
