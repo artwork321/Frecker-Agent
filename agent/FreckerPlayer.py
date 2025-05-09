@@ -1,5 +1,3 @@
-# COMP30024 Artificial Intelligence, Semester 1 2025
-# Project Part B: Game Playing Agent
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
 from agent.constants import *    
@@ -327,9 +325,10 @@ class GreedyAgent:
 
         # Check if game would be over after this action
         self._internal_state.apply_action(max_action, is_grow=(max_action is None))
+        
         if self._internal_state.game_over:
-            # self.save_game_state()
-            return best_action
+            self.save_game_state()
+
         self._internal_state.undo_action(is_grow=(max_action is None))
 
         return best_action
@@ -410,7 +409,7 @@ class GreedyAgent:
         elif isinstance(action, GrowAction):
             self._internal_state.apply_action(None, True)
         
-        # self.save_game_state()
+        self.save_game_state()
         
     def save_game_state(self):
         """
@@ -421,32 +420,53 @@ class GreedyAgent:
         self.game_states.append(state_copy)
 
         if self._internal_state.game_over:
-            print("Game Over")
             self.save_complete_game()
+
 
     def save_complete_game(self, save_dir="game_states"):
         """
-        Saves the complete game history to a pickle file.
+        Saves the complete game history to a JSON file.
         """
         import os
-        import pickle
+        import json
         
+        os.makedirs(save_dir, exist_ok=True)
         
+        # Convert game state objects to JSON-serializable format
+        portable_states = []
+        for state in self.game_states:
+            portable_state = {}
+            
+            # Handle AgentBoard type
+            if hasattr(state, "pieces") and hasattr(state, "_red_frogs"):
+                # Include board representation
+                if hasattr(state.pieces, "tolist"):
+                    portable_state["board"] = state.pieces.tolist()
+                else:
+                    portable_state["board"] = state.pieces
+                
+                portable_state["turn_color"] = state._turn_color
+            
+            portable_states.append(portable_state)
+            
+        # Create the final data structure
         state_data = {
-            "game_states": self.game_states,
-            "winner": -self._internal_state._turn_color,
+            "game_states": portable_states,
+            "winner": -self._internal_state._turn_color if hasattr(self._internal_state, "_turn_color") else None,
+            "board_size": 8,
+            "format_version": "1.0"
         }  
 
         # Find the next available file number
-        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and f.endswith(".pkl")]
+        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and (f.endswith(".pkl") or f.endswith(".json"))]
         file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
         next_file_number = max(file_numbers) + 1 if file_numbers else 1
         
-        filename = f"{save_dir}/game_state_{next_file_number}.pkl"
+        filename = f"{save_dir}/game_state_{next_file_number}.json"
         
-        with open(filename, "wb") as f:
+        with open(filename, "w") as f:
             print(f"Saving game state to {filename}")
-            pickle.dump(state_data, f)
+            json.dump(state_data, f, indent=2)
 
 # Choose an action with the highest evaluation score after a depth-limited minimax search
 class SlowMiniMaxAgent:
@@ -481,7 +501,7 @@ class SlowMiniMaxAgent:
             # Immediately return if the game is over
             if new_state.game_over:
                 self._internal_state = new_state
-                # self.save_game_state()
+                self.save_game_state()
                 return action
 
             action_values[action] = self._minimax(new_state, is_pruning=PRUNING)
@@ -498,6 +518,7 @@ class SlowMiniMaxAgent:
         # Base case: game over or depth limit reached
         if state.game_over or depth >= 3:
             # if state.game_over:
+            #     print("Game Over")
                 # self.save_complete_game()
             return self._evaluate(state)
 
@@ -609,7 +630,7 @@ class SlowMiniMaxAgent:
         print("Minimax V0 Node: ", self._num_nodes)
         print("Time remaining: ", referee["time_remaining"])
         self._internal_state = self._internal_state.apply_action(color, action)
-        # self.save_game_state()
+        self.save_game_state()
 
     def save_game_state(self):
         """
@@ -621,32 +642,94 @@ class SlowMiniMaxAgent:
 
         if self._internal_state.game_over:
             print("Game Over")
-            # self.save_complete_game()
+            self.save_complete_game()
 
     def save_complete_game(self, save_dir="game_states"):
         """
-        Saves the complete game history to a pickle file.
+        Saves the complete game history to a JSON file.
         """
         import os
-        import pickle
+        import json
         
         os.makedirs(save_dir, exist_ok=True)
         
+        # Convert game state objects to JSON-serializable format
+        portable_states = []
+        for state in self.game_states:
+            portable_state = {}
+            
+            # Handle SlowBoardState type
+            if hasattr(state, "_blue_frogs") and hasattr(state, "_red_frogs"):
+                # Create empty board
+                board = [[0 for _ in range(8)] for _ in range(8)]
+                
+                # Process lily pads
+                for pad in state._lily_pads:
+                    # Handle both Coord objects and tuples
+                    if hasattr(pad, "r") and hasattr(pad, "c"):
+                        r, c = pad.r, pad.c
+                    else:
+                        r, c = pad[0], pad[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = 2  # LILYPAD value
+                
+                # Process red frogs
+                for frog in state._red_frogs:
+                    if hasattr(frog, "r") and hasattr(frog, "c"):
+                        r, c = frog.r, frog.c
+                    else:
+                        r, c = frog[0], frog[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = 1  # RED value
+
+                
+                # Process blue frogs
+                for frog in state._blue_frogs:
+                    if hasattr(frog, "r") and hasattr(frog, "c"):
+                        r, c = frog.r, frog.c
+                    else:
+                        r, c = frog[0], frog[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = -1  # BLUE value
+
+                
+                # Add data to portable state
+                portable_state["board"] = board
+
+                
+                # Get turn color
+                turn_color = state._turn_color
+                if turn_color is not None:
+                    if hasattr(turn_color, "value"):
+                        # PlayerColor enum
+                        portable_state["turn_color"] = turn_color.value
+                    else:
+                        # Integer value
+                        portable_state["turn_color"] = turn_color      
+            
+            portable_states.append(portable_state)
+            
+        # Create the final data structure
         state_data = {
-            "game_states": self.game_states,
-            "winner": -self._internal_state._turn_color.value,
+            "game_states": portable_states,
+            "winner": self._internal_state._turn_color.value,
+            "board_size": 8,
+            "format_version": "1.0"
         }  
 
         # Find the next available file number
-        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and f.endswith(".pkl")]
+        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and (f.endswith(".pkl") or f.endswith(".json"))]
         file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
         next_file_number = max(file_numbers) + 1 if file_numbers else 1
         
-        filename = f"{save_dir}/game_state_{next_file_number}.pkl"
+        filename = f"{save_dir}/game_state_{next_file_number}.json"
         
-        with open(filename, "wb") as f:
+        with open(filename, "w") as f:
             print(f"Saving game state to {filename}")
-            pickle.dump(state_data, f)
+            json.dump(state_data, f, indent=2)
 
 # Choose a random action
 class RandomAgent:
@@ -701,28 +784,110 @@ class RandomAgent:
 
     def save_complete_game(self, save_dir="game_states"):
         """
-        Saves the complete game history to a pickle file.
+        Saves the complete game history to a JSON file.
         """
         import os
-        import pickle
+        import json
         
         os.makedirs(save_dir, exist_ok=True)
         
+        # Convert game state objects to JSON-serializable format
+        portable_states = []
+        for state in self.game_states:
+            portable_state = {}
+            
+            # Handle SlowBoardState type
+            if hasattr(state, "_blue_frogs") and hasattr(state, "_red_frogs"):
+                # Create empty board
+                board = [[0 for _ in range(8)] for _ in range(8)]
+                red_frogs = []
+                blue_frogs = []
+                lily_pads = []
+                
+                # Process lily pads
+                for pad in state._lily_pads:
+                    # Handle both Coord objects and tuples
+                    if hasattr(pad, "r") and hasattr(pad, "c"):
+                        r, c = pad.r, pad.c
+                    else:
+                        r, c = pad[0], pad[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = 2  # LILYPAD value
+                        lily_pads.append([r, c])
+                
+                # Process red frogs
+                for frog in state._red_frogs:
+                    if hasattr(frog, "r") and hasattr(frog, "c"):
+                        r, c = frog.r, frog.c
+                    else:
+                        r, c = frog[0], frog[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = 1  # RED value
+                        red_frogs.append([r, c])
+                
+                # Process blue frogs
+                for frog in state._blue_frogs:
+                    if hasattr(frog, "r") and hasattr(frog, "c"):
+                        r, c = frog.r, frog.c
+                    else:
+                        r, c = frog[0], frog[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = -1  # BLUE value
+                        blue_frogs.append([r, c])
+                
+                # Add data to portable state
+                portable_state["board"] = board
+                portable_state["red_frogs"] = red_frogs
+                portable_state["blue_frogs"] = blue_frogs
+                portable_state["lily_pads"] = lily_pads
+                
+                # Get turn color
+                turn_color = state._turn_color
+                if turn_color is not None:
+                    if hasattr(turn_color, "value"):
+                        # PlayerColor enum
+                        portable_state["turn_color"] = turn_color.value
+                    else:
+                        # Integer value
+                        portable_state["turn_color"] = turn_color
+            
+            # Handle AgentBoard type
+            elif hasattr(state, "pieces") and hasattr(state, "_red_frogs"):
+                # Include board representation
+                if hasattr(state.pieces, "tolist"):
+                    portable_state["board"] = state.pieces.tolist()
+                else:
+                    portable_state["board"] = state.pieces
+                
+                # Convert frog coordinates
+                portable_state["red_frogs"] = [[x, y] for x, y in state._red_frogs]
+                portable_state["blue_frogs"] = [[x, y] for x, y in state._blue_frogs]
+                portable_state["turn_color"] = state._turn_color
+                portable_state["turn_count"] = state._turn_count
+            
+            portable_states.append(portable_state)
+            
+        # Create the final data structure
         state_data = {
-            "game_states": self.game_states,
-            "winner": -self._internal_state._turn_color.value,
+            "game_states": portable_states,
+            "winner": -self._internal_state._turn_color.value if hasattr(self._internal_state, "_turn_color") else None,
+            "board_size": 8,
+            "format_version": "1.0"
         }  
 
         # Find the next available file number
-        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and f.endswith(".pkl")]
+        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and (f.endswith(".pkl") or f.endswith(".json"))]
         file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
         next_file_number = max(file_numbers) + 1 if file_numbers else 1
         
-        filename = f"{save_dir}/game_state_{next_file_number}.pkl"
+        filename = f"{save_dir}/game_state_{next_file_number}.json"
         
-        with open(filename, "wb") as f:
+        with open(filename, "w") as f:
             print(f"Saving game state to {filename}")
-            pickle.dump(state_data, f)
+            json.dump(state_data, f, indent=2)
 
 # Choose a random downwards/upwards move, otherwise random
 class SmarterRandomAgent:
@@ -756,18 +921,17 @@ class SmarterRandomAgent:
             action = possible_actions[random.randint(0, len(possible_actions) - 1)]
         
         # Check if game would be over after this action
-
-        # new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
-        # if new_state.game_over:
-        #     self._internal_state = new_state
-            # self.save_game_state()
+        new_state = self._internal_state.apply_action(self._internal_state._turn_color, action)
+        if new_state.game_over:
+            self._internal_state = new_state
+            self.save_game_state()
             
         return action
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         new_state = self._internal_state.apply_action(color, action)
         self._internal_state = new_state
-        # self.save_game_state()
+        self.save_game_state()
         
     def save_game_state(self):
         """
@@ -784,28 +948,88 @@ class SmarterRandomAgent:
 
     def save_complete_game(self, save_dir="game_states"):
         """
-        Saves the complete game history to a pickle file.
+        Saves the complete game history to a JSON file.
         """
         import os
-        import pickle
+        import json
         
         os.makedirs(save_dir, exist_ok=True)
         
+        # Convert game state objects to JSON-serializable format
+        portable_states = []
+        for state in self.game_states:
+            portable_state = {}
+            
+            # Handle SlowBoardState type
+            if hasattr(state, "_blue_frogs") and hasattr(state, "_red_frogs"):
+                # Create empty board
+                board = [[0 for _ in range(8)] for _ in range(8)]
+                
+                for pad in state._lily_pads:
+                    # Handle both Coord objects and tuples
+                    if hasattr(pad, "r") and hasattr(pad, "c"):
+                        r, c = pad.r, pad.c
+                    else:
+                        r, c = pad[0], pad[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = LILYPAD
+                
+                # Process red frogs
+                for frog in state._red_frogs:
+                    if hasattr(frog, "r") and hasattr(frog, "c"):
+                        r, c = frog.r, frog.c
+                    else:
+                        r, c = frog[0], frog[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = RED  # RED value
+ 
+                
+                # Process blue frogs
+                for frog in state._blue_frogs:
+                    if hasattr(frog, "r") and hasattr(frog, "c"):
+                        r, c = frog.r, frog.c
+                    else:
+                        r, c = frog[0], frog[1]
+                    
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        board[r][c] = BLUE  # BLUE value
+
+                
+                # Add data to portable state
+                portable_state["board"] = board
+                
+                # Get turn color
+                turn_color = state._turn_color
+                if turn_color is not None:
+                    if hasattr(turn_color, "value"):
+                        # PlayerColor enum
+                        portable_state["turn_color"] = turn_color.value
+                    else:
+                        # Integer value
+                        portable_state["turn_color"] = turn_color
+            
+            portable_states.append(portable_state)
+            
+        # Create the final data structure
         state_data = {
-            "game_states": self.game_states,
-            "winner": -self._internal_state._turn_color.value,
+            "game_states": portable_states,
+            "winner": self._internal_state._turn_color.value,
+            "board_size": 8,
+            "format_version": "1.0"
         }  
 
         # Find the next available file number
-        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and f.endswith(".pkl")]
+        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and (f.endswith(".pkl") or f.endswith(".json"))]
         file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
         next_file_number = max(file_numbers) + 1 if file_numbers else 1
         
-        filename = f"{save_dir}/game_state_{next_file_number}.pkl"
+        filename = f"{save_dir}/game_state_{next_file_number}.json"
         
-        with open(filename, "wb") as f:
+        with open(filename, "w") as f:
             print(f"Saving game state to {filename}")
-            pickle.dump(state_data, f)
+            json.dump(state_data, f, indent=2)
 
 # Minimax agent with different evaluation function  
 class MiniMaxAgent:
@@ -859,10 +1083,16 @@ class MiniMaxAgent:
             
             # Immediately return if the game is over
             if self._internal_state.game_over:
+                self.save_game_state()
                 return action
             
             # Dynamically adjust the cut-off depth for minimax
-            if is_grow or (origin[0] >= 2 and origin[0] <= 5): cut_off += 2
+            if not is_grow and move:
+                origin, _, _ = move
+                mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
+
+            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: cut_off += 2
+
             action_values[action] = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
 
             self._internal_state.undo_action(is_grow=is_grow)
@@ -878,8 +1108,6 @@ class MiniMaxAgent:
 
         # Base case: game over or depth limit reached
         if self._internal_state.game_over or depth >= cut_off:
-            # if self._internal_state.game_over:
-                # self.save_complete_game()
             return self._evaluate()
 
         is_maximizing = self._internal_state._turn_color == RED
@@ -937,7 +1165,7 @@ class MiniMaxAgent:
                 
 
     def _evaluate(self) -> float:
-        score = simple_alter_eval(self._internal_state)
+        score = simple_eval(self._internal_state)
         return score
 
 
@@ -965,7 +1193,7 @@ class MiniMaxAgent:
 
         print("Time Remaining: ", referee["time_remaining"])
         print("Space Remaining", referee["space_remaining"])
-        # self.save_game_state()
+        self.save_game_state()
         
 
     def save_game_state(self):
@@ -981,30 +1209,212 @@ class MiniMaxAgent:
         self.game_states.append(state_copy)
 
         if self._internal_state.game_over:
-            print("Game Over")
-            # self.save_complete_game()
+            self.save_complete_game()
 
     def save_complete_game(self, save_dir="game_states"):
         """
-        Saves the complete game history to a pickle file.
+        Saves the complete game history to a JSON file.
         """
         import os
-        import pickle
+        import json
         
         os.makedirs(save_dir, exist_ok=True)
         
+        # Convert game state objects to JSON-serializable format
+        portable_states = []
+        for state in self.game_states:
+            portable_state = {}
+        
+            # Handle AgentBoard type
+            if hasattr(state, "pieces") and hasattr(state, "_red_frogs"):
+                # Include board representation
+                if hasattr(state.pieces, "tolist"):
+                    portable_state["board"] = state.pieces.tolist()
+                else:
+                    portable_state["board"] = state.pieces
+                
+                portable_state["turn_color"] = state._turn_color
+            
+            portable_states.append(portable_state)
+            
+        # Create the final data structure
         state_data = {
-            "game_states": self.game_states,
+            "game_states": portable_states,
             "winner": -self._internal_state._turn_color,
+            "board_size": 8,
+            "format_version": "1.0"
         }  
 
         # Find the next available file number
-        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and f.endswith(".pkl")]
+        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and (f.endswith(".pkl") or f.endswith(".json"))]
         file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
         next_file_number = max(file_numbers) + 1 if file_numbers else 1
         
-        filename = f"{save_dir}/game_state_{next_file_number}.pkl"
+        filename = f"{save_dir}/game_state_{next_file_number}.json"
         
-        with open(filename, "wb") as f:
+        with open(filename, "w") as f:
             print(f"Saving game state to {filename}")
-            pickle.dump(state_data, f)
+            json.dump(state_data, f, indent=2)
+
+# Minimax agent using XGBoost evaluation function
+class MLMiniMaxAgent:
+    """
+    This class implements a game-playing agent using the Minimax algorithm.
+    """
+
+    def __init__(self, color: PlayerColor, **referee: dict):
+        """
+        Initializes the agent with the given player color.
+        """
+        self._internal_state = AgentBoard()
+        self._is_maximizer = color == PlayerColor.RED
+        self._num_nodes = 0
+        self.a = ['a'] * 10000000 # space remaining
+        self.game_states = []
+        
+        print(f"Testing: I am playing as {'RED' if self._is_maximizer else 'BLUE'}")
+
+
+    def action(self, **referee: dict) -> Action:
+        """
+        Determines the best action to take using the Minimax algorithm.
+        """
+        def convert_to_directions(tuple_list: list[tuple[int, int]]) -> list[Direction]:
+            tuple_dir = tuple(Direction(t) for t in tuple_list)
+            if len(tuple_dir) == 1:
+                return tuple_dir[0]
+            else:
+                return tuple_dir
+
+        def convert_action(origin, directions):
+            converted_dir = convert_to_directions(directions)
+            return MoveAction(Coord(r=origin[0], c=origin[1]), converted_dir)
+
+        possible_actions = self._internal_state.generate_move_actions()
+        possible_actions.append(None)  # Represent the grow action as None
+        action_values = {}
+
+        for move in possible_actions:
+            cut_off = 3
+            self._num_nodes += 1
+
+            is_grow = move is None 
+            self._internal_state.apply_action(move, is_grow=is_grow)
+            
+            if is_grow:
+                action = GrowAction()
+            else:
+                origin, directions, _ = move
+                action = convert_action(origin, directions)
+            
+            # Immediately return if the game is over
+            if self._internal_state.game_over:
+                return action
+
+            # Dynamically adjust the cut-off depth for minimax
+            if not is_grow and move:
+                origin, _, _ = move
+                mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
+
+            if (mid_end_game) and referee["time_remaining"] >= 60: cut_off += 0
+            elif referee["time_remaining"] < 60: cut_off -= 2
+
+            action_values[action] = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
+            self._internal_state.undo_action(is_grow=is_grow)
+
+        print("Action Values: ", action_values)
+
+        action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
+
+        return action
+
+
+    def _minimax(self, depth: int = 0, alpha = -math.inf, beta = math.inf, is_pruning=True, cut_off=DEPTH_LIMIT) -> float:
+        
+        depth += 1
+
+        # Base case: game over or depth limit reached
+        if self._internal_state.game_over or depth >= cut_off:                
+            return self._evaluate()
+
+        is_maximizing = self._internal_state._turn_color == RED
+
+        if is_maximizing:
+            max_eval = -math.inf
+
+            # Generate all possible actions, including the grow action
+            actions = self._internal_state.generate_move_actions()
+            actions.append(None)  # Represent the grow action as None
+
+            for move in actions:
+                is_grow = move is None
+
+                self._internal_state.apply_action(move, is_grow=is_grow)
+                self._num_nodes += 1
+
+                eval = self._minimax(depth, alpha, beta, is_pruning, cut_off=cut_off)
+
+                self._internal_state.undo_action(is_grow=is_grow)
+
+                max_eval = max(max_eval, eval)
+                alpha = max(alpha, max_eval)
+
+                if is_pruning and beta <= max_eval:
+                    break
+
+            return max_eval
+        else:
+            min_eval = math.inf
+
+            # Generate all possible actions, including the grow action
+            actions = self._internal_state.generate_move_actions()
+            actions.append(None)  # Represent the grow action as None
+
+            for move in actions:
+                is_grow = move is None
+
+                self._internal_state.apply_action(move, is_grow=is_grow)
+                self._num_nodes += 1
+
+                eval = self._minimax(depth, alpha, beta, is_pruning, cut_off=cut_off)
+
+                self._internal_state.undo_action(is_grow=is_grow)
+
+                min_eval = min(min_eval, eval)
+                beta = min(beta, min_eval)
+
+                # Prune the branch
+                if is_pruning and min_eval <= alpha:
+                    break
+        
+            return min_eval
+                
+
+    def _evaluate(self) -> float:
+        score  = xgboost_eval(self._internal_state)
+        return score
+        
+
+    def update(self, color: PlayerColor, action: Action, **referee: dict):
+        """
+        Updates the agent's internal game state after a player takes their turn.
+        """
+        print("ML Agent Nodes: ", self._num_nodes)
+
+        if isinstance(action, MoveAction):
+            origin = (action.coord.r, action.coord.c)
+            directions = action.directions
+
+            # Convert MoveAction to a tuple of properties
+            curr_coord = origin
+            for direction in map(lambda d: tuple(d.value), directions):
+                curr_coord = self._internal_state._get_destination(curr_coord, direction)[:2]
+            move = (origin, directions, curr_coord)
+
+            self._internal_state.apply_action(move, False)
+
+        elif isinstance(action, GrowAction):
+            self._internal_state.apply_action(None, True)
+            
+        print("Time Remaining: ", referee["time_remaining"])
+        print("Space Remaining", referee["space_remaining"])

@@ -1,14 +1,22 @@
-import json
 import numpy as np
-from agent.constants import *
 import os
+from agent.constants import *
 
-class JSON_XGBoost:
-    xg_model_json = None
+class NP_XGBoost:
+    # Class-level variable to cache the model across instances
+    _cached_model = None
+    _cached_trees = None
+    _is_preprocessed = False
 
     def __init__(self):
-        with open(os.path.join(os.path.dirname(__file__), 'model', 'xg_model.json'), 'r') as f:
-            self.xg_model_json = json.load(f)
+        # Use the cached model if available, otherwise load it
+        if self._cached_model is None:
+            # Load flattened model
+            path = os.path.join(os.path.dirname(__file__), '../model', 'xgb_compiled.npz')
+            flattened_model = np.load(path)
+            self._cached_trees = [flattened_model[key] for key in flattened_model.files]
+            self._cached_model = flattened_model.files
+
 
 
     def compute_features(self, board, player_color=RED):
@@ -174,37 +182,41 @@ class JSON_XGBoost:
         ])
 
 
-    def predict_single_tree(self, tree, board, player_color=RED):
+    def predict_single_tree(self, tree, features):
+        """Optimized single tree traversal using NumPy arrays"""
+           # Start at the root node (first row)
+        node_id = 0
 
+        while True:
+            node = tree[node_id]
+            feature_idx, threshold, left_id, right_id, leaf_value, is_leaf = node
+            
+            # If this is a leaf node, return the leaf value
+            if is_leaf == 1:
+                return leaf_value
+            
+            # Otherwise, traverse left or right based on the feature value
+            feature_value = features[int(feature_idx)]
+            if feature_value < threshold:
+                node_id = int(left_id)
+            else:
+                node_id = int(right_id)
+
+
+    def predict(self, board, player_color=RED, maximum_trees=200):
+        """Optimized prediction using all trees"""
+        # Compute features only once for both player and opponent
         player_feature = self.compute_features(board, player_color)
         opp_feature = self.compute_features(board, -player_color)
         features = np.concatenate([player_feature, opp_feature])
         
-        node = 0  # start from root node
-        while True:
-            if tree['left_children'][node] == -1:
-                # print("leaf node: ", node)
-                # print(tree['base_weights'][node])
-                return tree['base_weights'][node]
-
-            split_index = tree['split_indices'][node]
-            threshold = tree['split_conditions'][node]
-            feature_value = features[split_index]
-
-            if feature_value is None:
-                go_left = tree['default_left'][node]
-            else:
-                go_left = feature_value < threshold
-
-            node = tree['left_children'][node] if go_left else tree['right_children'][node]
-
-    def predict(self, board, player_color=RED, maximum_trees=10):
         sum_pred = 0
-        for tree in self.xg_model_json['learner']['gradient_booster']['model']['trees'][:maximum_trees]:
-            sum_pred += self.predict_single_tree(tree, board, player_color)
+        for tree in self._cached_trees[:maximum_trees]:
+            sum_pred += self.predict_single_tree(tree, features)
         
         scale = 200 / maximum_trees
         sum_pred = sum_pred * scale
 
-        score = 1 / (1 + np.exp(-sum_pred))
-        return score
+        return 1 / (1 + np.exp(-sum_pred))
+
+

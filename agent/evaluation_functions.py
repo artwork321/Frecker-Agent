@@ -1,5 +1,6 @@
 import numpy as np
-from agent.json_xgboost import JSON_XGBoost
+from agent.xgboost_convert.json_xgboost import JSON_XGBoost
+from agent.xgboost_convert.numpy_xgboost import NP_XGBoost
 from agent.constants import *
 
 
@@ -8,6 +9,7 @@ def simple_eval(state) -> float:
     Evaluate the state by calculating the difference between RED and BLUE positions.
     Returns a positive score if RED is in a better position, negative if BLUE is ahead.
     """
+   
     def get_est_distance(target, curr_frog) -> int:
         """
         Estimate the distance between a frog and a target lily pad.
@@ -16,6 +18,7 @@ def simple_eval(state) -> float:
         verti_dist = abs(target[0] - curr_frog[0])
         horiz_dist = abs(target[1] - curr_frog[1])
         n_diag_moves = min(verti_dist, horiz_dist)
+
         return verti_dist + horiz_dist - n_diag_moves
 
     def calculate_feature_score(remaining_frogs, color) -> tuple:
@@ -28,10 +31,8 @@ def simple_eval(state) -> float:
 
         # Define legal directions based on player color
         if color == BLUE:
-            relax_row = 6
             legal_directions = DIRECTIONS_TO_GOAL[BLUE] 
         else:
-            relax_row = 1
             legal_directions = DIRECTIONS_TO_GOAL[RED] 
 
         for frog in remaining_frogs:
@@ -46,7 +47,7 @@ def simple_eval(state) -> float:
                     is_blocked = False
             
             # do not care about the blocked if frogs are very close to the goal
-            if is_blocked and frog[0] != relax_row and len(remaining_frogs) >= 2:
+            if is_blocked and len(remaining_frogs) >= 2 and ((frog[0] < 6 and color == RED) or (frog[0] > 2 and color == BLUE)):
                 block_score += 1
 
         return block_score, jump_score
@@ -55,9 +56,6 @@ def simple_eval(state) -> float:
     finished_red = [frog for frog in state._red_frogs if frog[0] == 7]
     finished_blue = [frog for frog in state._blue_frogs if frog[0] == 0]
     finished_diff = len(finished_red) - len(finished_blue)
-
-    # convert number to range [-1, 1]
-    finished_diff = (finished_diff - 0)/N_FROGS 
     
     # Remaining frogs (not at goal)
     remaining_red = [frog for frog in state._red_frogs if frog not in finished_red]
@@ -103,7 +101,8 @@ def simple_eval(state) -> float:
     # Apply weights to features
     score = sum(w * f for w, f in zip(weights, features))
 
-    return np.tanh(score)
+    return score
+
 
 def simple_alter_eval(state) -> float:
     """
@@ -201,6 +200,11 @@ def simple_alter_eval(state) -> float:
 
     return score
 
+
 def xgboost_eval(state) -> float:
     model = JSON_XGBoost()
-    return model.predict(board=state.pieces)
+    return model.predict(state.pieces, 1, maximum_trees=200)
+
+def np_xgboost_eval(state) -> float:
+    model = NP_XGBoost()
+    return model.predict(state.pieces, 1, maximum_trees=200)

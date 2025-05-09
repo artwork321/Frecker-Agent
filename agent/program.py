@@ -1,14 +1,11 @@
 # COMP30024 Artificial Intelligence, Semester 1 2025
 # Project Part B: Game Playing Agent
-import os
-import copy
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
 from agent.constants import *    
 import math
 from agent.state import *
 from agent.evaluation_functions import *
-import json
 
 
 class Agent:
@@ -63,11 +60,15 @@ class Agent:
             
             # Immediately return if the game is over
             if self._internal_state.game_over:
-                # self.save_game_state()
                 return action
 
             # Dynamically adjust the cut-off depth for minimax
-            if (is_grow or (origin[0] >= 2 and origin[0] <= 5)) and referee["time_remaining"] >= 30: cut_off += ADDITIONAL_DEPTH
+            if not is_grow and move:
+                origin, _, _ = move
+                mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
+
+            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: cut_off += ADDITIONAL_DEPTH
+            elif referee["time_remaining"] < 60 and cut_off > 1: cut_off -= ADDITIONAL_DEPTH
 
             action_values[action] = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
             self._internal_state.undo_action(is_grow=is_grow)
@@ -84,11 +85,7 @@ class Agent:
         depth += 1
 
         # Base case: game over or depth limit reached
-        if self._internal_state.game_over or depth >= cut_off:
-            # if (self._internal_state.game_over):
-            #     print("Game Over")
-            #     self.save_game_state()
-                
+        if self._internal_state.game_over or depth >= cut_off:                
             return self._evaluate()
 
         is_maximizing = self._internal_state._turn_color == RED
@@ -145,8 +142,7 @@ class Agent:
                 
 
     def _evaluate(self) -> float:
-        # score = simple_eval(self._internal_state)
-        score  = xgboost_eval(self._internal_state)
+        score = simple_eval(self._internal_state)
         return score
         
 
@@ -173,37 +169,3 @@ class Agent:
             
         print("Time Remaining: ", referee["time_remaining"])
         print("Space Remaining", referee["space_remaining"])
-        # self.save_game_state()
-
-
-    def save_game_state(self, **referee: dict):
-        """
-        Saves the current game state.
-        """
-        state_copy = copy.deepcopy(self._internal_state)
-
-        self.game_states.append(state_copy)
-
-        if self._internal_state.game_over:
-            print("Game Over")
-            self.save_complet_game()
-
-
-    def save_complet_game(self, save_dir="game_states"):
-        os.makedirs(save_dir, exist_ok=True)
-
-        state_data = {
-            "game_states": self.game_states,
-            "winner": -self._internal_state._turn_color,
-        }
-
-        # Find the next available file number
-        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and f.endswith(".pkl")]
-        file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
-        next_file_number = max(file_numbers) + 1 if file_numbers else 1
-        
-        filename = f"{save_dir}/game_state_{next_file_number}.pkl"
-        
-        with open(filename, "wb") as f:
-            print(f"Saving game state to {filename}")
-            json.dump(state_data, f)

@@ -3,7 +3,7 @@ BLUE = -1
 LILYPAD = 2
 EMPTY = 0
 
-DEPTH_LIMIT = 1
+DEPTH_LIMIT = 5
 PRUNING = True
 ADDITIONAL_DEPTH = 1
 
@@ -31,3 +31,5 @@ DIRECTIONS_SIDEWAY = [(0, -1), # left
                     (0, 1)] # right
 
 N_FROGS = 6
+
+BOARD_N = 8
