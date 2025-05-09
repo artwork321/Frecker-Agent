@@ -63,6 +63,7 @@ class Agent:
                 return action
 
             # Dynamically adjust the cut-off depth for minimax
+            mid_end_game = False
             if not is_grow and move:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
@@ -158,9 +159,13 @@ class Agent:
 
             # Convert MoveAction to a tuple of properties
             curr_coord = origin
-            for direction in map(lambda d: tuple(d.value), directions):
-                curr_coord = self._internal_state._get_destination(curr_coord, direction)[:2]
-            move = (origin, directions, curr_coord)
+            converted_directions = []
+            for direction in directions:
+                direction_tuple = tuple(direction.value)
+                converted_directions.append(direction_tuple)
+                curr_coord = self._internal_state._get_destination(curr_coord, direction_tuple)[:2]
+
+            move = (origin, converted_directions, curr_coord)
 
             self._internal_state.apply_action(move, False)
 

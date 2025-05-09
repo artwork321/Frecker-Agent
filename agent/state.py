@@ -41,16 +41,20 @@ class AgentBoard:
         """
         Apply the action to the board.
         """
+        x, y, is_jump = None, None, None
         
         if move is not None and not is_grow:
-            origin, _, endpoint = move
+            origin, directions, endpoint = move
+            x, y, is_jump = self._get_destination(origin, directions[0])
             self._history.append(self.move(origin, endpoint))
+
         else:
             self._history.append(self.grow())
         
         self._turn_color = -self._turn_color
         self._turn_count += 1
 
+        return x, y, is_jump
 
     def undo_action(self, is_grow):
         """

@@ -1086,7 +1086,8 @@ class MiniMaxAgent:
                 self.save_game_state()
                 return action
             
-            # Dynamically adjust the cut-off depth for minimax
+            # Dynamically adjust the cut-off depth for minimax\
+            mid_end_game = False
             if not is_grow and move:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
@@ -1182,9 +1183,13 @@ class MiniMaxAgent:
 
             # Convert MoveAction to a tuple of properties
             curr_coord = origin
-            for direction in map(lambda d: tuple(d.value), directions):
-                curr_coord = self._internal_state._get_destination(curr_coord, direction)[:2]
-            move = (origin, directions, curr_coord)
+            converted_directions = []
+            for direction in directions:
+                direction_tuple = tuple(direction.value)
+                converted_directions.append(direction_tuple)
+                curr_coord = self._internal_state._get_destination(curr_coord, direction_tuple)[:2]
+
+            move = (origin, converted_directions, curr_coord)
 
             self._internal_state.apply_action(move, False)
 
@@ -1297,14 +1302,24 @@ class MLMiniMaxAgent:
         for move in possible_actions:
             cut_off = 3
             self._num_nodes += 1
+            multiplier = 1
 
             is_grow = move is None 
-            self._internal_state.apply_action(move, is_grow=is_grow)
+            _, _, is_jump = self._internal_state.apply_action(move, is_grow=is_grow)
             
             if is_grow:
                 action = GrowAction()
             else:
                 origin, directions, _ = move
+                is_multiple_jump = len(directions) > 1
+
+                if is_multiple_jump:
+                    multiplier = 5 if self._is_maximizer else 0.2
+                elif is_jump and directions[0] in DIRECTIONS_TO_GOAL[-self._internal_state._turn_color]:
+                    multiplier = 4 if self._is_maximizer else 0.25
+                elif not is_jump and directions[0] in DIRECTIONS_TO_GOAL[-self._internal_state._turn_color]:
+                    multiplier = 3 if self._is_maximizer else 0.33
+
                 action = convert_action(origin, directions)
             
             # Immediately return if the game is over
@@ -1312,14 +1327,17 @@ class MLMiniMaxAgent:
                 return action
 
             # Dynamically adjust the cut-off depth for minimax
+            mid_end_game = False
             if not is_grow and move:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
-
+            
             if (mid_end_game) and referee["time_remaining"] >= 60: cut_off += 0
             elif referee["time_remaining"] < 60: cut_off -= 2
 
-            action_values[action] = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
+            value = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
+
+            action_values[action] = value * multiplier
             self._internal_state.undo_action(is_grow=is_grow)
 
         print("Action Values: ", action_values)
@@ -1407,9 +1425,15 @@ class MLMiniMaxAgent:
 
             # Convert MoveAction to a tuple of properties
             curr_coord = origin
-            for direction in map(lambda d: tuple(d.value), directions):
-                curr_coord = self._internal_state._get_destination(curr_coord, direction)[:2]
-            move = (origin, directions, curr_coord)
+            converted_directions = []
+            for direction in directions:
+                direction_tuple = tuple(direction.value)
+                converted_directions.append(direction_tuple)
+                curr_coord = self._internal_state._get_destination(curr_coord, direction_tuple)[:2]
+
+            # print(converted_directions)
+            
+            move = (origin, converted_directions, curr_coord)
 
             self._internal_state.apply_action(move, False)
 
