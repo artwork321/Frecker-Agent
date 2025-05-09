@@ -517,9 +517,6 @@ class SlowMiniMaxAgent:
 
         # Base case: game over or depth limit reached
         if state.game_over or depth >= 3:
-            # if state.game_over:
-            #     print("Game Over")
-                # self.save_complete_game()
             return self._evaluate(state)
 
         is_maximizing = state._turn_color == PlayerColor.RED
@@ -1305,20 +1302,21 @@ class MLMiniMaxAgent:
             multiplier = 1
 
             is_grow = move is None 
-            _, _, is_jump = self._internal_state.apply_action(move, is_grow=is_grow)
+            self._internal_state.apply_action(move, is_grow=is_grow)
             
             if is_grow:
                 action = GrowAction()
+                multiplier = 2 if self._is_maximizer else 1/2
             else:
-                origin, directions, _ = move
+                origin, directions, endpoint = move
                 is_multiple_jump = len(directions) > 1
 
-                if is_multiple_jump:
-                    multiplier = 5 if self._is_maximizer else 0.2
-                elif is_jump and directions[0] in DIRECTIONS_TO_GOAL[-self._internal_state._turn_color]:
-                    multiplier = 4 if self._is_maximizer else 0.25
-                elif not is_jump and directions[0] in DIRECTIONS_TO_GOAL[-self._internal_state._turn_color]:
-                    multiplier = 3 if self._is_maximizer else 0.33
+                if is_multiple_jump and abs(endpoint[0] - origin[0]) > 1:
+                    multiplier = 5 if self._is_maximizer else 1/5
+                elif abs(endpoint[0] - origin[0]) > 1:
+                    multiplier = 4 if self._is_maximizer else 1/4
+                elif directions[0] in DIRECTIONS_TO_GOAL[-self._internal_state._turn_color]:
+                    multiplier = 3 if self._is_maximizer else 1/3
 
                 action = convert_action(origin, directions)
             
@@ -1335,7 +1333,7 @@ class MLMiniMaxAgent:
             if (mid_end_game) and referee["time_remaining"] >= 60: cut_off += 0
             elif referee["time_remaining"] < 60: cut_off -= 2
 
-            value = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
+            value = self._minimax(prev_move=move, is_pruning=PRUNING, cut_off=cut_off)
 
             action_values[action] = value * multiplier
             self._internal_state.undo_action(is_grow=is_grow)
@@ -1347,15 +1345,30 @@ class MLMiniMaxAgent:
         return action
 
 
-    def _minimax(self, depth: int = 0, alpha = -math.inf, beta = math.inf, is_pruning=True, cut_off=DEPTH_LIMIT) -> float:
+    def _minimax(self, depth: int = 0, alpha = -math.inf, beta = math.inf, prev_move = None, is_pruning=True, cut_off=DEPTH_LIMIT) -> float:
         
         depth += 1
-
-        # Base case: game over or depth limit reached
-        if self._internal_state.game_over or depth >= cut_off:                
-            return self._evaluate()
-
         is_maximizing = self._internal_state._turn_color == RED
+        
+        # Base case: game over or depth limit reached
+        if self._internal_state.game_over or depth >= cut_off:    
+            score = self._evaluate()
+
+            multiplier = 1
+            if prev_move is not None:
+                origin, directions, endpoint = prev_move
+                is_multiple_jump = len(directions) > 1
+
+                if is_multiple_jump and abs(endpoint[0] - origin[0]) > 1: # a forward multiple jump
+                    multiplier = 1/5 if is_maximizing else 5
+                elif abs(endpoint[0] - origin[0]) > 1: # a forward jump
+                    multiplier = 1/4 if is_maximizing else 4
+                elif directions[0] in DIRECTIONS_TO_GOAL[-self._internal_state._turn_color]: # a forward move
+                    multiplier = 1/3 if is_maximizing else 3
+            else:
+                multiplier = 1/2 if is_maximizing else 2
+
+            return score * multiplier
 
         if is_maximizing:
             max_eval = -math.inf
@@ -1367,10 +1380,25 @@ class MLMiniMaxAgent:
             for move in actions:
                 is_grow = move is None
 
-                self._internal_state.apply_action(move, is_grow=is_grow)
+                _, _, is_jump = self._internal_state.apply_action(move, is_grow=is_grow)
                 self._num_nodes += 1
 
-                eval = self._minimax(depth, alpha, beta, is_pruning, cut_off=cut_off)
+                # set multiplier based on the type of move
+                multiplier = 1
+                # if move is not None:
+                #     origin, directions, endpoint = move
+                #     is_multiple_jump = len(directions) > 1
+
+                #     if is_multiple_jump and abs(endpoint[0] - origin[0]) >= 1:
+                #         multiplier = 7 
+                #     elif is_jump and abs(endpoint[0] - origin[0]) >= 1:
+                #         multiplier = 5
+                #     elif directions[0] in DIRECTIONS_TO_GOAL[-self._internal_state._turn_color]:
+                #         multiplier = 3
+                # elif is_grow:
+                #     multiplier = 2
+
+                eval = self._minimax(depth, alpha, beta, move, is_pruning, cut_off=cut_off) * multiplier
 
                 self._internal_state.undo_action(is_grow=is_grow)
 
@@ -1391,10 +1419,25 @@ class MLMiniMaxAgent:
             for move in actions:
                 is_grow = move is None
 
-                self._internal_state.apply_action(move, is_grow=is_grow)
+                _, _, is_jump = self._internal_state.apply_action(move, is_grow=is_grow)
                 self._num_nodes += 1
 
-                eval = self._minimax(depth, alpha, beta, is_pruning, cut_off=cut_off)
+                # set multiplier based on the type of move
+                multiplier = 1
+                # if move is not None:
+                #     origin, directions, endpoint = move
+                #     is_multiple_jump = len(directions) > 1
+
+                #     if is_multiple_jump and abs(endpoint[0] - origin[0]) >= 1:
+                #         multiplier = 1/7.0
+                #     elif is_jump and abs(endpoint[0] - origin[0] >= 1):
+                #         multiplier = 1/5.0
+                #     elif directions[0] in DIRECTIONS_TO_GOAL[-self._internal_state._turn_color]:
+                #         multiplier = 1/3.0
+                # elif is_grow:
+                #     multiplier = 0.5
+
+                eval = self._minimax(depth, alpha, beta, move, is_pruning, cut_off=cut_off) * multiplier
 
                 self._internal_state.undo_action(is_grow=is_grow)
 
@@ -1409,7 +1452,7 @@ class MLMiniMaxAgent:
                 
 
     def _evaluate(self) -> float:
-        score  = xgboost_eval(self._internal_state)
+        score  = xgboost_eval(self._internal_state, self._is_maximizer)
         return score
         
 

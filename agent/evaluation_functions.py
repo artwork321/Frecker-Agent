@@ -201,9 +201,46 @@ def simple_alter_eval(state) -> float:
     return score
 
 
-def xgboost_eval(state) -> float:
+def xgboost_eval(state, is_maximizer) -> float:
     model = JSON_XGBoost()
-    return model.predict(state.pieces, 1, maximum_trees=200)
+
+    # switch board
+    def switch_perspectives(state):
+        flip_board = state.pieces.copy()
+
+        for red_frog in state._red_frogs:
+            x, y = red_frog
+            flip_board[x, y] = BLUE
+
+        for blue_frog in state._blue_frogs:
+            x, y = blue_frog
+            flip_board[x, y] = RED
+        
+        # flip the board
+        flip_board = np.flipud(flip_board)
+
+        return flip_board
+
+    next_turn = state._turn_color
+
+    if is_maximizer:
+        if next_turn == BLUE:
+            board = switch_perspectives(state)
+            score = model.predict(board)
+            return (1 - score)
+        else:
+            score = model.predict(state.pieces)
+            return score
+    else:
+        board = switch_perspectives(state)
+
+        if next_turn == RED:
+            score = model.predict(state.pieces)
+            return score # minimize the probability of RED winning
+        else:
+            score = model.predict(board) # BLUE turn, get probability of BLUE winning
+            return 1-score # minimize the probability of BLUE losing
+
 
 def np_xgboost_eval(state) -> float:
     model = NP_XGBoost()

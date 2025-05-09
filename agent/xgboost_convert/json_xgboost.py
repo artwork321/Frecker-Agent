@@ -46,14 +46,14 @@ class JSON_XGBoost:
         JSON_XGBoost._cached_trees = trees
         JSON_XGBoost._is_preprocessed = True
 
-    def compute_features(self, board, player_color=RED):
+    def compute_features(self, board, player_color=1):
         n = board.shape[0]
         goal_row = 0 if player_color == -1 else n - 1
         frog_positions = list(zip(*np.where(board == player_color))) # TODO can retrieve if this is part of Board class
         frog_not_at_goal_positions = [(r, c) for r, c in frog_positions if r != goal_row]
         frog_at_goal_positions = [(r, c) for r, c in frog_positions if r == goal_row]
         n_frogs_not_at_goal = len(frog_not_at_goal_positions)
-        n_frogs_at_goal = 6 - n_frogs_not_at_goal
+        n_frogs_at_goal = N_FROGS - n_frogs_not_at_goal
 
         # Distance to goal stats 
         distances = [abs(r - goal_row) for r, _ in frog_positions]
@@ -78,7 +78,7 @@ class JSON_XGBoost:
                 if dist_to_goal < min_dist_to_goal:
                     min_dist_to_goal = dist_to_goal
             min_dists_to_goal.append(min_dist_to_goal)
-        avg_min_dist_to_goal = sum(min_dists_to_goal) / 6
+        avg_min_dist_to_goal = sum(min_dists_to_goal) / N_FROGS
 
         # Setup counters     
         jumpable = blocked = edge = assistable = near_goal = reachable_pads = grow_needed = 0
@@ -207,9 +207,11 @@ class JSON_XGBoost:
             goal_pad_ratio,         # 18
             avg_min_dist_to_goal,   # 19
         ])
+    
 
     def predict_single_tree(self, tree, features):
         """Optimized single tree traversal using NumPy arrays"""
+
         node = 0  # start from root node
         while True:
             if tree['left_children'][node] == -1:
@@ -226,19 +228,20 @@ class JSON_XGBoost:
 
             node = tree['left_children'][node] if go_left else tree['right_children'][node]
 
-    def predict(self, board, player_color=RED, maximum_trees=200):
+
+    def predict(self, board, maximum_trees=200):
         """Optimized prediction using all trees"""
+
         # Compute features only once for both player and opponent
-        player_feature = self.compute_features(board, player_color)
-        opp_feature = self.compute_features(board, -player_color)
-        features = np.concatenate([player_feature, opp_feature])
+        red_feature = self.compute_features(board, RED)
+        blue_feature = self.compute_features(board, BLUE)
+        features = np.concatenate([red_feature, blue_feature])
         
         sum_pred = 0
         for tree in self.trees[:maximum_trees]:
             sum_pred += self.predict_single_tree(tree, features)
-        
-        scale = 200 / maximum_trees
-        sum_pred = sum_pred * scale
 
         score = 1 / (1 + np.exp(-sum_pred))
         return score
+    
+  
