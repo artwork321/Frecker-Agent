@@ -1,4 +1,5 @@
 import numpy as np
+from referee.game import Direction
 
 '''
 Author: Eric P. Nichols
@@ -102,6 +103,9 @@ class Board():
                     self.player_cells[RED].append((x, y))
                 elif self.pieces[x][y] == BLUE:  
                     self.player_cells[BLUE].append((x, y))
+                    
+    def getBoard(self):
+        return np.array(self.pieces)
 
     def countDiff(self, color):
         """Counts the difference in #pieces at goal of the given color
@@ -199,7 +203,7 @@ class Board():
         # search all possible directions.
         return self._discover_moves(square, color, multi_jump)
 
-    def execute_move(self, origin, direction, color, is_multi_jump=False): # TODO handle multi-jumps; for now, assume game only allows max 1 jump
+    def execute_move(self, origin, direction, color): # TODO handle multi-jumps; for now, assume game only allows max 1 jump
         """Perform the given move on the board.
         color gives the color of the piece to play (1=red,-1=blue)
         """
@@ -213,14 +217,12 @@ class Board():
         # if color < 0:
         #     direction = type(self).__opp_direction[direction]
         x, y = origin
-        self.pieces[x][y] = EMPTY if not is_multi_jump else PAD
+        self.pieces[x][y] = EMPTY
 
-        is_jump = False
         x, y = self._get_move_endpoint(origin, direction)
         if self.pieces[x][y] == color or self.pieces[x][y] == -color:
             # jump
             x, y = self._get_move_endpoint((x, y), direction)
-            is_jump = True
             
         if self.pieces[x][y] != PAD:
             import pdb; pdb.set_trace()
@@ -240,8 +242,22 @@ class Board():
 
         if not self._is_valid_square(x, y):
             import pdb; pdb.set_trace()
-            
-        return is_jump
+
+    def execute_multi_jump(self, origin, jump_directions, color):
+        x, y = origin
+        self.pieces[x][y] = EMPTY
+
+        for jump_dir in jump_directions:
+            x, y = self._get_move_endpoint((x, y), jump_dir)
+
+        if self.pieces[x][y] != PAD:
+            import pdb; pdb.set_trace()
+
+        self.pieces[x][y] = color
+        if origin not in self.player_cells[color]:
+            import pdb; pdb.set_trace()
+        self.player_cells[color].remove(origin)
+        self.player_cells[color].append((x, y))
 
     def execute_grow(self, color):
         for player_cell in self.player_cells[color]:
@@ -252,8 +268,10 @@ class Board():
         # import pdb; pdb.set_trace()
         
     def execute_multiple_moves(self, origin, directions, color):
-        if len(directions) == 1:
-            self.execute_move(origin, directions[0], color)
+        origin = (origin.r, origin.c)
+        if isinstance(directions, Direction):
+            directions = (directions.r, directions.c)
+            self.execute_move(origin, directions, color)
         else:
             x, y = origin
             self.pieces[x][y] = EMPTY
@@ -279,28 +297,32 @@ class Board():
             x, y = self._get_move_endpoint(origin, direction)
             # check if the move is valid 
             if self._is_valid_square(x, y) and self.pieces[x][y] == PAD:
-                moves.append((origin, [direction], (x, y)))
+                moves.append([(origin, direction)])
 
         # print(f"moves wo jumps: {moves}")
         # explore possible jumps
         moves += self._discover_jumps(origin, color, multi_jump)
 
-        # print(f"moves w jumps: {moves}")
+        # print(f"board:\n {self.pieces}")
+        # print(f"jumps: {moves}")
         return moves
 
-    def _discover_jumps(self, origin, color, multi_jump=False):
+    def _discover_jumps(self, origin, color, multi_jump=False, last_dir=None):
         jump_moves = []
 
         for direction in type(self).__jump_directions[color]:
+            if not last_dir is None and direction[1] * last_dir[1] < 0: # prevent circles 
+                continue
+
             x, y = self._get_move_endpoint(origin, direction)
             mid_x, mid_y = self._get_move_endpoint(origin, [int(c/2) for c in direction])
             # check if the move is valid 
             if self._is_valid_square(x, y) and self.pieces[mid_x][mid_y] in [RED, BLUE] and self.pieces[x][y] == PAD:
-                jump_moves.append((origin, [direction], (x, y)))
+                jump_moves.append([(origin, direction)])
                 if multi_jump:
                     # explore possible multi-jumps
-                    for _, next_directions, endpoint in self._discover_jumps((x, y), color, multi_jump):
-                        jump_moves.append((origin, [direction] + next_directions, endpoint))
+                    for next_jump in self._discover_jumps((x, y), color, multi_jump=True, last_dir=direction):
+                        jump_moves.append([(origin, direction)] + next_jump)
 
         return jump_moves
 
@@ -312,7 +334,7 @@ class Board():
     def _get_multi_jump_endpoint(self, origin, directions):
         x, y = origin
         for direction in directions:
-            x, y = x + direction[0]*2, y + direction[1]*2
+            x, y = x + direction.r*2, y + direction.c*2
         return x, y
 
     def _is_valid_square(self, x, y):

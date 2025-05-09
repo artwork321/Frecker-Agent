@@ -10,12 +10,10 @@ class RandomPlayer():
     def __init__(self, game: FreckersGame):
         self.game = game
 
-    def play(self, board, is_multi_jump=False, last_jump=None): # always from 1's perspective 
-        a = np.random.randint(self.game.getActionSize())
+    def play(self, board): # always from 1's perspective 
         valids = self.game.getValidMoves(board, 1)
-        while valids[a]!=1:
-            a = np.random.randint(self.game.getActionSize())
-        return a
+        a = np.random.randint(len(valids))
+        return valids[a]
     
 class SmarterRandomPlayer():
     """This agent always selects a random downwards/upwards move when such action is valid.
@@ -24,20 +22,48 @@ class SmarterRandomPlayer():
     def __init__(self, game: FreckersGame):
         self.game = game
 
-    def play(self, board, is_multi_jump=False, last_jump=None): # always from 1's perspective 
+    def play(self, board): # always from 1's perspective 
         valids = self.game.getValidMoves(board, 1)
-        n_actions = self.game.getActionSize()
-        valid_dirs_to_goal = []
-        valid_dirs = []
-        for i in range(n_actions):
-            if valids[i]:
-                valid_dirs.append(i)
-                if i%N_MOVES in DIR_TO_GOAL_IDS or i==8*8*5: #last one is grow
-                    valid_dirs_to_goal.append(i)
-        
-        if valid_dirs_to_goal: # and np.random.rand() < 0.8:
-            a = np.random.randint(len(valid_dirs_to_goal))
-            return valid_dirs_to_goal[a]
+        n_valids = len(valids)
+        valid_to_goal = []
+        for valid in valids:
+            # import pdb; pdb.set_trace()
+            for action in valid:
+                if action%N_MOVES in DIR_TO_GOAL_IDS or action==8*8*5: #last one is grow
+                    valid_to_goal.append(valid)
+                    break
 
-        a = np.random.randint(len(valid_dirs))
-        return valid_dirs[a]
+        if valid_to_goal: # and np.random.rand() < 0.8:
+            a = np.random.randint(len(valid_to_goal))
+            return valid_to_goal[a]
+
+        a = np.random.randint(n_valids)
+        return valids[a]
+
+class GreedyPlayer():
+    def __init__(self, game: FreckersGame):
+        self.game = game
+
+    def play(self, board):
+        valids = self.game.getValidMoves(board, 1)
+        candidates = []
+        for a in range(len(valids)):
+            nextBoard, _ = self.game.getNextState(board, 1, valids[a])
+            score = self.game.getScore(nextBoard, 1)
+            candidates += [(-score, valids[a])]
+        candidates.sort()
+        return candidates[0][1]
+    
+class SmarterGreedyPlayer():
+    def __init__(self, game: FreckersGame):
+        self.game = game
+
+    def play(self, board):
+        valids = self.game.getValidMoves(board, 1)
+        candidates = []
+        for a in range(len(valids)):
+            nextBoard, _ = self.game.getNextState(board, 1, valids[a])
+            score = eval_from_board(nextBoard, 1)  
+            candidates += [(-score, valids[a])]
+        candidates.sort()
+        return candidates[0][1] # player 1 selects the action that leads to the smallest opp_score 
