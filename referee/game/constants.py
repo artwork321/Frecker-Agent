@@ -7,5 +7,4 @@ NUM_PLAYERS     = 2
 BOARD_N         = 8
 MAX_TURNS       = 150
 
-DEPTH_LIMIT     = 3
-PRUNING = True
+
