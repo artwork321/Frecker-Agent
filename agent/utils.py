@@ -270,3 +270,7 @@ class BoardState:
             lily_pads=self._lily_pads.copy(),
             turn_color=self._turn_color
         )
+        
+class dotdict(dict):
+    def __getattr__(self, name):
+        return self[name]
