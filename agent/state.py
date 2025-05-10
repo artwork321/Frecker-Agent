@@ -1,25 +1,17 @@
+import os
+import sys
 import numpy as np
 
-# Try to import constants from both possible locations
-try:
-    # First try with agent.constants (local environment)
-    from agent.constants import *
-except ImportError:
-    # Fallback for submission environment
-    try:
-        from constants import *
-    except ImportError:
-        # Define constants if both imports fail
-        RED = 1
-        BLUE = -1
-        LILYPAD = 2
-        EMPTY = 0
-        DEPTH_LIMIT = 5
-        PRUNING = True
-        ADDITIONAL_DEPTH = 1
-        ALL_DIRECTIONS = [(1,1),(1,0),(1,-1),(0,-1),(-1,-1),(-1,0),(-1,1),(0,1)]
-        DIRECTIONS = {1: [(1, 0), (1, -1), (1, 1), (0, -1), (0, 1)], 
-                     -1: [(-1, 0), (-1, -1), (-1, 1), (0, -1), (0, 1)]}
+# Add the current directory to the path to handle both import scenarios
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Now imports will work in both environments
+from constants import *
 
 class AgentBoard:
 

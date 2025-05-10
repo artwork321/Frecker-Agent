@@ -1,28 +1,23 @@
 # COMP30024 Artificial Intelligence, Semester 1 2025
 # Project Part B: Game Playing Agent
-from referee.game import PlayerColor, Coord, Direction, \
-    Action, MoveAction, GrowAction
+import os
+import sys
 import math
 
-# Try to import constants from both possible locations
-try:
-    # First try with agent.constants (local environment)
-    from agent.constants import *
-except ImportError:
-    # Fallback for submission environment
-    from constants import *
+# Add the current directory to the path to handle both import scenarios
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
-
-# Try to import other modules from both possible locations
-try:
-    from agent.state import *
-except ImportError:
-    from state import *
-
-try:
-    from agent.evaluation_functions import *
-except ImportError:
-    from evaluation_functions import *
+# Now imports will work in both environments
+from referee.game import PlayerColor, Coord, Direction, \
+    Action, MoveAction, GrowAction
+from constants import *
+from state import *
+from evaluation_functions import *
 
 
 class Agent:

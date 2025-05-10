@@ -1,23 +1,19 @@
+import os
+import sys
 import numpy as np
 
-# Try to import XGBoost modules from both possible locations 
-try:
-    from agent.xgboost_convert.json_xgboost import JSON_XGBoost
-    from agent.xgboost_convert.numpy_xgboost import NP_XGBoost
-except ImportError:
-    try:
-        from xgboost_convert.json_xgboost import JSON_XGBoost
-        from xgboost_convert.numpy_xgboost import NP_XGBoost
-    except ImportError:
-        pass
+# Add the current directory to the path to handle both import scenarios
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
-# Try to import constants from both possible locations
-try:
-    # First try with agent.constants (local environment)
-    from agent.constants import *
-except ImportError:
-    from constants import *
-   
+
+from xgboost_convert.json_xgboost import JSON_XGBoost
+from xgboost_convert.numpy_xgboost import NP_XGBoost
+from constants import *
 
 
 def simple_eval(state) -> float:

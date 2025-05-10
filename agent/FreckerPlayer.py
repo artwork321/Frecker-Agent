@@ -3,25 +3,21 @@ from referee.game import PlayerColor, Coord, Direction, \
 import math
 import random
 from referee.game.board import Board
+import sys
+import os
 
-# Try to import constants from both possible locations
-try:
-    # First try with agent.constants (local environment)
-    from agent.constants import *
-except ImportError:
-    from constants import *
+# Add the current directory to the path to handle both import scenarios
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
+from constants import *
+from agent.state import *
+from evaluation_functions import *
 
-# Try to import other modules from both possible locations
-try:
-    from agent.state import *
-except ImportError:
-    from state import *
-
-try:
-    from agent.evaluation_functions import *
-except ImportError:
-    from evaluation_functions import *
 
 # Board state for slow minimax and random agent
 class SlowBoardState:

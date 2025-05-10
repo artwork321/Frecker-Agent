@@ -1,10 +1,17 @@
 import json
 import numpy as np
-try:
-    from agent.constants import *
-except ImportError:
-    from constants import *
+import sys
 import os
+
+# Add the current directory to the path to handle both import scenarios
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from constants import *
 import time
 
 class JSON_XGBoost:
