@@ -36,12 +36,24 @@ class MCTS():
         self.Es = {}  # stores game.getGameEnded ended for board s
         self.Vs = {}  # stores game.getValidMoves for board s
         
+        self.cpuct = 1
+        
         self.step = 0
         
     def getAction(self, canonicalBoard, temp=1, step=1):
         self.step = step
 
-        for i in range(self.args.numMCTSSims):
+        if self.step < self.args.mid:
+            n_sims = self.args.numMCTSSims_start
+            self.cpuct = self.args.cpuct_start
+        elif self.args.mid < self.step < self.args.end:
+            n_sims = self.args.numMCTSSims_mid
+            self.cpuct = self.args.cpuct_mid
+        else:
+            n_sims = self.args.numMCTSSims_end
+            self.cpuct = self.args.cpuct_end
+
+        for i in range(n_sims):
             # print(f"sim num: {i}")
             # self.search(canonicalBoard, depth=step)
             self.search(canonicalBoard, depth=step)
@@ -148,10 +160,10 @@ class MCTS():
         for i in range(n_valids):
             a = valids[i]
             if (s, a) in self.Qsa:
-                u = self.Qsa[(s, a)] + self.args.cpuct * self.Ps[s][i] * math.sqrt(self.Ns[s]) / (
+                u = self.Qsa[(s, a)] + self.cpuct * self.Ps[s][i] * math.sqrt(self.Ns[s]) / (
                         1 + self.Nsa[(s, a)])
             else:
-                u = self.args.cpuct * self.Ps[s][i] * math.sqrt(self.Ns[s] + EPS)  # Q = 0 ?
+                u = self.cpuct * self.Ps[s][i] * math.sqrt(self.Ns[s] + EPS)  # Q = 0 ?
 
             if u > cur_best:
                 cur_best = u

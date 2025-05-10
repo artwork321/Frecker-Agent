@@ -56,13 +56,16 @@ class MCTS_Agent:
 
         self.game = FreckersGame(N_BOARD)
         model = JSON_XGBoost()
-        args = dotdict({'numMCTSSims':50, 'cpuct':1.5, 
+        args = dotdict({'numMCTSSims_start': 30, 'numMCTSSims_mid': 70, 'numMCTSSims_end': 15, 
+                        'mid': 15, 'end': 50,
+                        'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
+
                         'grow_multiplier': 1,
                         'target_move_multiplier': 1,
                         'target_jump_multiplier': 3,
                         'target_opp_jump_multiplier': 5})
         self.mcts = MCTS(self.game, model, args)
-        self.step = 0
+        self.step = 1
 
     def action(self, **referee: dict) -> Action:
         """
