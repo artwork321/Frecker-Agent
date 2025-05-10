@@ -14,7 +14,7 @@ class JSON_XGBoost:
         # Use the cached model if available, otherwise load it
         if JSON_XGBoost._cached_model is None:
             start_time = time.time()
-            with open(os.path.join(os.path.dirname(__file__), '../model', 'model1.json'), 'r') as f:
+            with open(os.path.join(os.path.dirname(__file__), '../model', 'model2.json'), 'r') as f:
                 JSON_XGBoost._cached_model = json.load(f)
             
             # Preprocess the model into a more efficient format
@@ -54,7 +54,10 @@ class JSON_XGBoost:
         delta_n_frogs_at_goal = player_features["#frogs at goal row"] - opp_features["#frogs at goal row"]
         delta_avg_dist = player_features["avg min euclid dist to goal"] - opp_features["avg min euclid dist to goal"]
         delta_target_jump = player_features["target jump ratio"] - opp_features["target jump ratio"]
-        features = np.concatenate([features, [delta_n_frogs_at_goal, delta_avg_dist, delta_target_jump]])
+        delta_interaction = player_features["interaction score"] - opp_features["interaction score"]
+        delta_centrality = player_features["col centrality score"] - opp_features["col centrality score"]
+        features = np.concatenate([features, [delta_n_frogs_at_goal, delta_avg_dist, delta_target_jump, 
+                                            delta_interaction, delta_centrality]])
 
         return features
 
