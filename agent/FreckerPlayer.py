@@ -1340,7 +1340,7 @@ class MLMiniMaxAgent:
             action_values[action] = value * multiplier
             self._internal_state.undo_action(is_grow=is_grow)
 
-        print("Action Values: ", action_values)
+        # print("Action Values: ", action_values)
 
         action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
 

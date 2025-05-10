@@ -1,6 +1,7 @@
 RED = 1
 BLUE = -1
 LILYPAD = 2
+PAD = 2
 EMPTY = 0
 
 DEPTH_LIMIT = 3
