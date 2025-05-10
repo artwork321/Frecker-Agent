@@ -14,6 +14,7 @@ DIR_TO_GOAL_IDS = [1, 2, 3]
 N_MOVES = 5
 GROW_ACTION = N_BOARD*N_BOARD*N_MOVES
 STAY_MOVE = N_BOARD*N_BOARD*N_MOVES + 1
+SMALL_DEPTH = 20
 
 log = logging.getLogger(__name__)
 
@@ -35,17 +36,21 @@ class MCTS():
         self.Es = {}  # stores game.getGameEnded ended for board s
         self.Vs = {}  # stores game.getValidMoves for board s
         
+        self.step = 0
+        
     def getAction(self, canonicalBoard, temp=1, step=1):
+        self.step = step
+
         for i in range(self.args.numMCTSSims):
             # print(f"sim num: {i}")
             # self.search(canonicalBoard, depth=step)
-            self.search(canonicalBoard)
+            self.search(canonicalBoard, depth=step)
         
-        pi, valids = self.getActionProb(canonicalBoard, temp, step)
+        pi, valids = self.getActionProb(canonicalBoard, temp)
         action_idx = np.random.choice(len(pi), p=pi)
         return valids[action_idx]
 
-    def getActionProb(self, canonicalBoard, temp=1, step=1):
+    def getActionProb(self, canonicalBoard, temp=1):
         """
         This function performs numMCTSSims simulations of MCTS starting from
         canonicalBoard.
@@ -114,7 +119,7 @@ class MCTS():
 
         if s not in self.Ps:
             # leaf node
-            self.Ps[s], v, valids = self.getPredictions(canonicalBoard) 
+            self.Ps[s], v, valids = self.getPredictions(canonicalBoard, depth) 
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
                 self.Ps[s] /= sum_Ps_s  # renormalize
@@ -123,8 +128,8 @@ class MCTS():
 
                 # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
                 # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.   
-                log.error("All valid moves were masked, doing a workaround.")
-                import pdb; pdb.set_trace()
+                # log.error("All valid moves were masked, doing a workaround.")
+                # import pdb; pdb.set_trace()
                 self.Ps[s] = [1] * len(valids)
                 self.Ps[s] /= np.sum(self.Ps[s])
 
@@ -172,7 +177,7 @@ class MCTS():
         self.Ns[s] += 1
         return -v
     
-    def getPredictions(self, canonicalBoard):
+    def getPredictions(self, canonicalBoard, depth=0):
         """ return self.Ps[s]: vector of probs of actions from the current state
         v: chance of winning from the current state 
         """
@@ -189,18 +194,15 @@ class MCTS():
 
         for i in range(action_size):
             action = valid_actions[i]
-            p_actions[i] = 1
-            # next_state, next_player = self.game.getNextState(canonicalBoard, player=1, action=action)
-            # next_state = self.game.getCanonicalForm(next_state, player=next_player) # TODO can be optimized
-            # if next_player == -1:
-            #     p_actions[i] = 1 - self.model.predict(next_state, player=1) 
-            # else:
-            #     p_actions[i] = self.model.predict(next_state, player=1) 
+            # if depth > SMALL_DEPTH:
+            #     p_actions[i] = 1
 
             # encourage jump over opp to goal > jump over teammate towards goal 
             # > normal move towards goal > grow > move sideway
             for action_idx in action:
                 if action_idx%N_MOVES in DIR_TO_GOAL_IDS:
+                    if not p_actions[i]:
+                        p_actions[i] = 1
                     is_jump_over_teammate, is_jump_over_opp = self.game.isJumpAction(canonicalBoard, action_idx)
                     if is_jump_over_opp:
                         p_actions[i] *= self.args.target_opp_jump_multiplier
@@ -208,9 +210,17 @@ class MCTS():
                         p_actions[i] *= self.args.target_jump_multiplier
                     else:
                         p_actions[i] *= self.args.target_move_multiplier
-                elif i == GROW_ACTION:
+                elif action_idx == GROW_ACTION:
+                    if not p_actions[i]:
+                        p_actions[i] = 1
                     p_actions[i] *= self.args.grow_multiplier
-
+                    
+            if p_actions[i]:
+                next_state, next_player = self.game.getNextState(canonicalBoard, player=1, action=action)
+                next_state = self.game.getCanonicalForm(next_state, player=next_player) # TODO can be optimized
+                p_actions[i] *= (1 - self.model.predict(next_state))
+                
+        # print(f"prior {list(zip(valid_actions, p_actions))}")
         return p_actions, v, valid_actions
     
     def getSmarterRandPolicy(self, canonicalBoard):

@@ -47,19 +47,20 @@ class MCTS_Agent:
 
         self.game = FreckersGame(N_BOARD)
         model = JSON_XGBoost()
-        args = dotdict({'numMCTSSims':250, 'cpuct':2, 
-                        'grow_multiplier': 2,
-                        'target_move_multiplier': 2,
-                        'target_jump_multiplier': 4,
-                        'target_opp_jump_multiplier': 5})
+        args = dotdict({'numMCTSSims':40, 'cpuct':1.5, 
+                        'grow_multiplier': 1,
+                        'target_move_multiplier': 1,
+                        'target_jump_multiplier': 2,
+                        'target_opp_jump_multiplier': 3})
         self.mcts = MCTS(self.game, model, args)
+        self.step = 0
 
     def action(self, **referee: dict) -> Action:
         """
         This method is called by the referee each time it is the agent's turn
         to take an action. It must always return an action object. 
         """
-        action = self.mcts.getAction(self.board.getBoard(), temp=0)
+        action = self.mcts.getAction(self.board.getBoard(), temp=0, step=self.step)
 
         if action[0] == GROW_ACTION_IDX:
             self.board.execute_grow(PLAYER)
@@ -77,6 +78,8 @@ class MCTS_Agent:
         This method is called by the referee after a player has taken their
         turn. You should use it to update the agent's internal game state. 
         """
+        self.step += 1
+
         if color == self._color:
             return 
 
