@@ -28,7 +28,7 @@ def main():
 
     # Explicitly override __stdout__ to raise an exception if it is used (this
     # is a hack to prevent the subprocess from using stdout, which is used for
-    # data interchange with the parent process)
+    # data interchange with the parent process) 
     class _StdoutOverride:
         def write(self, *args, **kwargs):
             raise RuntimeError(_STDOUT_OVERRIDE_MESSAGE)

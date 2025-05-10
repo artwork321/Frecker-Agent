@@ -9,6 +9,7 @@ from .xg_model import XGModel
 from .mcts import MCTS
 from .game import FreckersGame
 from .board import Board
+from agent.xgboost_convert.json_xgboost import JSON_XGBoost
 
 N_BOARD = 8
 N_MOVES = 5
@@ -22,7 +23,7 @@ OPPONENT = -1
 GROW_ACTION_IDX = 320
 STAY_ACTION_IDX = 321
 
-class Agent:
+class MCTS_Agent:
     """
     This class is the "entry point" for your agent, providing an interface to
     respond to various Freckers game events.
@@ -45,42 +46,31 @@ class Agent:
             self.board.switch_perspectives() # agent always treats itself as a RED player
 
         self.game = FreckersGame(N_BOARD)
-        model = XGModel(self.game)
-        model.load_model('./temp_xg3/','best.pkl') # TODO
-        args = dotdict({'numMCTSSims': 200, 'cpuct':2, 
-                            'grow_multiplier': 1.5,
-                            'target_move_multiplier': 2,
-                            'target_jump_multiplier': 3,
-                            'target_opp_jump_multiplier': 5,
-                            'target_multi_jump_multiplier': 3})
+        model = JSON_XGBoost()
+        args = dotdict({'numMCTSSims':40, 'cpuct':1.5, 
+                        'grow_multiplier': 1,
+                        'target_move_multiplier': 1,
+                        'target_jump_multiplier': 2,
+                        'target_opp_jump_multiplier': 3})
         self.mcts = MCTS(self.game, model, args)
+        self.step = 0
 
     def action(self, **referee: dict) -> Action:
         """
         This method is called by the referee each time it is the agent's turn
         to take an action. It must always return an action object. 
         """
-        directions = []
-        action = self.mcts.getAction(self.board, temp=0)
+        action = self.mcts.getAction(self.board.getBoard(), temp=0, step=self.step)
 
-        if action == GROW_ACTION_IDX:
+        if action[0] == GROW_ACTION_IDX:
             self.board.execute_grow(PLAYER)
             return GrowAction()
 
-        next_state, next_player = self.game.getNextState(self.board, 1, action)
-        origin, direction = self._decode_action(action)
-        directions.append(direction)
-
-        # handle multi-jump 
-        while next_player == 1:
-            action = self.mcts.getAction(next_state, temp=0, is_multi_jump=True, last_jump=action)
-            next_state, next_player = self.game.getNextState(next_state, next_player, action, is_multi_jump=True)
-
-            if action != STAY_ACTION_IDX:
-                _, direction = self._decode_action(action)
-                directions.append(direction)
+        next_state, _ = self.game.getNextState(self.board.getBoard(), PLAYER, action)
+        origin, directions = self._decode_action(action)
 
         self.board.setPieces(next_state)
+        print(f"MCTS dirs {directions}")
         return MoveAction(origin, directions)
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
@@ -88,6 +78,8 @@ class Agent:
         This method is called by the referee after a player has taken their
         turn. You should use it to update the agent's internal game state. 
         """
+        self.step += 1
+
         if color == self._color:
             return 
 
@@ -103,8 +95,16 @@ class Agent:
                 self.board.execute_grow(OPPONENT)
             case _:
                 raise ValueError(f"Unknown action type: {action}")
+            
+        print("Time Remaining: ", referee["time_remaining"])
+        print("Space Remaining", referee["space_remaining"])
 
     def _decode_action(self, action):
-        origin = (int(int(action/N_MOVES)/N_BOARD), int(action/N_MOVES)%N_BOARD)
-        direction = IDX_DIRECTION[action%N_MOVES]
-        return Coord(origin), Direction(direction)
+        directions = []
+        origin = (int(int(action[0]/N_MOVES)/N_BOARD), int(action[0]/N_MOVES)%N_BOARD)
+
+        for single_action in action:
+            direction = IDX_DIRECTION[single_action%N_MOVES]
+            directions.append(Direction(*direction))
+
+        return Coord(*origin), directions

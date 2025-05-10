@@ -60,11 +60,10 @@ class FreckersGame():
 
     def getActionSize(self):
         # return number of actions
-        return self.n*self.n*N_MOVES + 1 + 1
+        return self.n*self.n*N_MOVES + 1
         # #start_squares * #possible_directions (move) + grow
-        # + stay (only available for multi-jump)
 
-    def getNextState(self, board, player, action, is_multi_jump=False):
+    def getNextState(self, board, player, action):
         # if player takes action on board, return next (board,player)
         # action must be a valid move
         b = Board(self.n)
@@ -72,28 +71,37 @@ class FreckersGame():
         if len(b.player_cells[1]) != N_FROGS or len(b.player_cells[-1]) != N_FROGS:
             import pdb; pdb.set_trace()
 
-        if action == GROW_ACTION:
+        if action[0] == GROW_ACTION:
             # print(f"executing grow for player {player}")
             b.execute_grow(player)
             return (b.pieces, -player)
-        
-        if action == STAY_ACTION:
-            return (b.pieces, -player)
 
-        origin = (int(int(action/N_MOVES)/self.n), int(action/N_MOVES)%self.n)
-        direction = type(self).__id_direction[action%N_MOVES]
-        # print(f"origin {origin}")
-        # print(f"direction: {direction}")
+        if len(action) == 1:
+            action = action[0]
+            origin = (int(int(action/N_MOVES)/self.n), int(action/N_MOVES)%self.n)
+            direction = type(self).__id_direction[action%N_MOVES]
+            # print(f"origin {origin}")
+            # print(f"direction: {direction}")
+            if player < 0:
+                origin = ((N_BOARD - 1) - origin[0], origin[1])
+                direction = FreckersGame.__opp_direction[direction]
+            b.execute_move(origin, direction, player)
 
-        if player < 0:
-            origin = ((N_BOARD - 1) - origin[0], origin[1])
-            direction = FreckersGame.__opp_direction[direction]
-        is_jump = b.execute_move(origin, direction, player, is_multi_jump)
-
-        if is_jump:
-            return (b.pieces, player)
         else:
-            return (b.pieces, -player)
+            jump_directions = []
+            origin = (int(int(action[0]/N_MOVES)/self.n), int(action[0]/N_MOVES)%self.n)
+            if player < 0:
+                origin = ((N_BOARD - 1) - origin[0], origin[1])
+
+            for jump in action:
+                direction = type(self).__id_direction[jump%N_MOVES]
+                if player < 0:
+                    direction = FreckersGame.__opp_direction[direction]
+                jump_directions.append((direction[0]*2, direction[1]*2))
+
+            b.execute_multi_jump(origin, jump_directions, player)
+
+        return (b.pieces, -player)
     
     def isJumpAction(self, canonicalBoard, action):
         origin = (int(int(action/N_MOVES)/self.n), int(action/N_MOVES)%self.n)
@@ -117,42 +125,27 @@ class FreckersGame():
         # if x <0: import pdb; pdb.set_trace()
         return N_BOARD*N_MOVES*x + N_MOVES*y + direction_idx
 
-    def getValidMoves(self, board, player=1, is_multi_jump=False, last_jump=None):
-        if is_multi_jump:
-            return self.getValidNextJumps(board, last_jump, player)
+    def getValidMoves(self, board, player=1):
         # return a fixed size binary vector
-        valids = [0]*self.getActionSize()
+        valids = []
         b = Board(self.n)
         b.setPieces(np.copy(board))
 
         if b.has_legal_grow(player):
-            valids[GROW_ACTION]=1
+            valids.append(tuple([GROW_ACTION]))
 
-        legalMoves = b.get_legal_moves(player) 
+        legalMoves = b.get_legal_moves(player, multi_jump=True) 
         # print(f"legal moves: {legalMoves}")
-        for origin, directions, _ in legalMoves:
-            # print(f"origin: {origin}")
-            # print(f"directions: {directions}")
-            x, y = origin
-            direction_idx = type(self).__direction_ids[directions[0]] 
-            valids[self.n*N_MOVES*x + N_MOVES*y + direction_idx] = 1
-
-        return np.array(valids)
-
-    def getValidNextJumps(self, board, last_jump, player=1):
-        valids = np.zeros(self.getActionSize())
-        valids[STAY_ACTION] = 1 # last move is stay
-
-        b = Board(self.n)
-        b.setPieces(np.copy(board))
-
-        last_direction, origin = self._get_jump_dir_endpoint(last_jump)
-        legalNextJumps = b._discover_jumps(origin, player)
-        for origin, directions, _ in legalNextJumps:
-            if directions[0][1] * last_direction[1] >= 0: # avoid circles (consecutive jumps of opposite col directions)
+        for origin_direction_list in legalMoves:
+            action_indices = []
+            for origin, direction in origin_direction_list:
+                # print(f"origin: {origin}")
+                # print(f"directions: {directions}")
                 x, y = origin
-                direction_idx = type(self).__direction_ids[directions[0]] 
-                valids[self.n*N_MOVES*x + N_MOVES*y + direction_idx] = 1
+                # import pdb; pdb.set_trace()
+                direction_idx = type(self).__direction_ids[direction] 
+                action_indices.append(self.n*N_MOVES*x + N_MOVES*y + direction_idx)
+            valids.append(tuple(action_indices))
 
         return valids
 
@@ -191,6 +184,22 @@ class FreckersGame():
 
         # print(f"getCanonicalForm board\n: {np.array(b.pieces)}")
         return np.array(b.pieces)
+
+    def getSymmetries(self, board, pi):
+        # reshape the policy vector to a 2D move policy grid
+        symmetries = []
+
+        # original
+        symmetries.append((board.copy(), pi.copy()))
+
+        # pi_board = np.reshape(pi[:-1], (self.n, self.n*N_MOVES))  # assuming last entry is for "grow"
+        # # horizontal flip
+        # board_flipped = np.fliplr(board)
+        # pi_flipped = np.fliplr(pi_board)
+        # pi_flipped = list(pi_flipped.ravel()) + [pi[-1]]  # preserve final action
+        # symmetries.append((board_flipped, pi_flipped))
+
+        return symmetries
 
     def stringRepresentation(self, board):
         # print(f"broad:\n {board}")
