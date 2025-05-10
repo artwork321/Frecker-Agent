@@ -1,6 +1,9 @@
 import numpy as np
 import os
-from agent.constants import *
+try:
+    from agent.constants import *
+except ImportError:
+    from constants import *
 
 class NP_XGBoost:
     # Class-level variable to cache the model across instances

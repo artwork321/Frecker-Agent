@@ -1,7 +1,23 @@
 import numpy as np
-from agent.xgboost_convert.json_xgboost import JSON_XGBoost
-from agent.xgboost_convert.numpy_xgboost import NP_XGBoost
-from agent.constants import *
+
+# Try to import XGBoost modules from both possible locations 
+try:
+    from agent.xgboost_convert.json_xgboost import JSON_XGBoost
+    from agent.xgboost_convert.numpy_xgboost import NP_XGBoost
+except ImportError:
+    try:
+        from xgboost_convert.json_xgboost import JSON_XGBoost
+        from xgboost_convert.numpy_xgboost import NP_XGBoost
+    except ImportError:
+        pass
+
+# Try to import constants from both possible locations
+try:
+    # First try with agent.constants (local environment)
+    from agent.constants import *
+except ImportError:
+    from constants import *
+   
 
 
 def simple_eval(state) -> float:
@@ -203,7 +219,7 @@ def simple_alter_eval(state) -> float:
 
 def xgboost_eval(state, is_maximizer) -> float:
     model = JSON_XGBoost()
-
+    
     # switch board
     def switch_perspectives(state):
         flip_board = state.pieces.copy()
@@ -226,8 +242,8 @@ def xgboost_eval(state, is_maximizer) -> float:
     if is_maximizer:
         if next_turn == BLUE:
             board = switch_perspectives(state)
-            score = model.predict(board)
-            return (1 - score)
+            score = model.predict(board) # probability of BLUE winning
+            return (1-score)
         else:
             score = model.predict(state.pieces)
             return score
@@ -239,7 +255,7 @@ def xgboost_eval(state, is_maximizer) -> float:
             return score # minimize the probability of RED winning
         else:
             score = model.predict(board) # BLUE turn, get probability of BLUE winning
-            return 1-score # minimize the probability of BLUE losing
+            return (1-score) # minimize the probability of BLUE losing
 
 
 def np_xgboost_eval(state) -> float:

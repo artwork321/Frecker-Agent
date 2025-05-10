@@ -1,5 +1,25 @@
 import numpy as np
-from agent.constants import *
+
+# Try to import constants from both possible locations
+try:
+    # First try with agent.constants (local environment)
+    from agent.constants import *
+except ImportError:
+    # Fallback for submission environment
+    try:
+        from constants import *
+    except ImportError:
+        # Define constants if both imports fail
+        RED = 1
+        BLUE = -1
+        LILYPAD = 2
+        EMPTY = 0
+        DEPTH_LIMIT = 5
+        PRUNING = True
+        ADDITIONAL_DEPTH = 1
+        ALL_DIRECTIONS = [(1,1),(1,0),(1,-1),(0,-1),(-1,-1),(-1,0),(-1,1),(0,1)]
+        DIRECTIONS = {1: [(1, 0), (1, -1), (1, 1), (0, -1), (0, 1)], 
+                     -1: [(-1, 0), (-1, -1), (-1, 1), (0, -1), (0, 1)]}
 
 class AgentBoard:
 

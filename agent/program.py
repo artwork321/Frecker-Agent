@@ -2,10 +2,27 @@
 # Project Part B: Game Playing Agent
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
-from agent.constants import *    
 import math
-from agent.state import *
-from agent.evaluation_functions import *
+
+# Try to import constants from both possible locations
+try:
+    # First try with agent.constants (local environment)
+    from agent.constants import *
+except ImportError:
+    # Fallback for submission environment
+    from constants import *
+
+
+# Try to import other modules from both possible locations
+try:
+    from agent.state import *
+except ImportError:
+    from state import *
+
+try:
+    from agent.evaluation_functions import *
+except ImportError:
+    from evaluation_functions import *
 
 
 class Agent:

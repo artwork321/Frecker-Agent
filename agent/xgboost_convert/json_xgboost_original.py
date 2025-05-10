@@ -1,6 +1,9 @@
 import json
 import numpy as np
-from agent.constants import *
+try:
+    from agent.constants import *
+except ImportError:
+    from constants import *
 import os
 
 class SLOW_JSON_XGBoost:
