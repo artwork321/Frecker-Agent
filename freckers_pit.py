@@ -10,6 +10,7 @@ type_of_agent = [
     "agent.FreckerPlayer:InEfficientMiniMaxAgent",
     "agent.FreckerPlayer:CorrectMiniMaxAgent",
     "agent.FreckerPlayer:MLMiniMaxAgent"
+    "agent.MCTS_XG.agent:MCTS_Agent"
 ]
 main_agent = "agent.MCTS_XG.agent:MCTS_Agent"
 

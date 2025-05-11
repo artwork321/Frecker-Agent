@@ -1336,9 +1336,11 @@ class CorrectMiniMaxAgent:
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
 
             if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: 
-                max_depth += 1
-            elif referee["time_remaining"] < 60 and max_depth > 2: 
+                max_depth += 2
+            elif referee["time_remaining"] < 100 and max_depth > 4:
                 max_depth -= 2
+            elif referee["time_remaining"] < 60 and max_depth > 2: 
+                max_depth -= 1
 
             # Pass alpha-beta values to minimax (starting with max_depth)
             value = self._minimax(depth=max_depth-1, alpha=alpha, beta=beta, is_pruning=PRUNING)
@@ -1577,7 +1579,7 @@ class MiniMaxAgent:
         beta = math.inf
 
         for move in possible_actions:
-            max_depth = 3
+            max_depth = 5
             # Only increment node count if we do a full search
             # Nodes inside minimax will be counted separately
 
@@ -1602,10 +1604,12 @@ class MiniMaxAgent:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
 
-            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: 
+            if mid_end_game and referee["time_remaining"] >= 60: 
                 max_depth += 2
-            elif referee["time_remaining"] < 60 and max_depth > 2: 
-                max_depth -= 2
+            elif referee["time_remaining"] < 100 and max_depth > 4:
+                max_depth -= 1
+            elif referee["time_remaining"] < 60 and max_depth > 3: 
+                max_depth -= 1
                 
             # Check transposition table before calling minimax
             value = None
