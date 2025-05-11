@@ -66,8 +66,11 @@ class JSON_XGBoost:
         delta_target_jump = player_features["target jump ratio"] - opp_features["target jump ratio"]
         delta_interaction = player_features["interaction score"] - opp_features["interaction score"]
         delta_centrality = player_features["col centrality score"] - opp_features["col centrality score"]
+        delta_avg_col = player_features["avg col"] - opp_features["avg col"]
+        delta_avg_reachable_pads = player_features["avg reachable pads"] - opp_features["avg reachable pads"]
         features = np.concatenate([features, [delta_n_frogs_at_goal, delta_avg_dist, delta_target_jump, 
-                                            delta_interaction, delta_centrality]])
+                                            delta_interaction, delta_centrality, delta_avg_col, 
+                                            delta_avg_reachable_pads]])
 
         return features
 
@@ -158,19 +161,16 @@ class JSON_XGBoost:
         target_jump_ratio = n_possible_target_jumps / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
 
         # Spread and centrality
-        if frog_not_at_goal_positions:
-            rows, cols = zip(*frog_positions)
-            var_row = np.var(rows)
-            var_col = np.var(cols)
-            spread_var = var_row + var_col
-            spread_rms = np.sqrt(spread_var)
-        else:
-            cols = []
-            spread_var = 0.0
-            spread_rms = 1.0
+        rows, cols = zip(*frog_positions)
+        var_row = np.var(rows)
+        var_col = np.var(cols)
+        spread_var = var_row + var_col
+        spread_rms = np.sqrt(spread_var)
 
         interaction = avg_dist * spread_rms
-        centrality = np.mean([abs(col - (n-1)/2) for col in cols]) if cols else 0
+        col_centrality = np.mean([abs(col - (n-1)/2) for col in cols]) if cols else 0
+
+        avg_col = np.mean(cols) 
 
         features = {
             "#frogs at goal row": n_frogs_at_goal,                    # 0
@@ -180,7 +180,8 @@ class JSON_XGBoost:
             "jumpable ratio": jumpable_ratio,                         # 4
             "interaction score": interaction,                         # 5
             "edge position ratio": edge_ratio,                        # 6
-            "col centrality score": centrality,                       # 7
+            "col centrality score": col_centrality,                   # 7
+            "avg col": avg_col,
             "spread variance": spread_var,                            # 8
             "assistable ratio": assistable_ratio,                     # 9
             "avg reachable pads": avg_reachable_pads,                 # 10
