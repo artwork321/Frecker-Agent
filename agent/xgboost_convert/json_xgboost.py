@@ -24,7 +24,7 @@ class JSON_XGBoost:
         # Use the cached model if available, otherwise load it
         if JSON_XGBoost._cached_model is None:
             start_time = time.time()
-            with open(os.path.join(os.path.dirname(__file__), '../model', 'model2.json'), 'r') as f:
+            with open(os.path.join(os.path.dirname(__file__), '../model', 'model3.json'), 'r') as f:
                 JSON_XGBoost._cached_model = json.load(f)
             
             # Preprocess the model into a more efficient format
