@@ -101,13 +101,21 @@ def simple_eval(state) -> float:
         
     internal_dis_diff = internal_red_dist - internal_blue_dist
 
-    # Calculate final score with weights
-    weights = [1.0,    # Finished frogs (most important)
-               0.37,    # Jump opportunities (good to have options)
-               -0.65,    # Distance to goal (very important)
-               -0.1,    # Clustering (want frogs to be together)
-              -0.1]       # Blocked frogs (not want frogs to have no way to move forward)
+    # Weights for early game: encourage clustering and jump opportunities
+    weights = [1.5,    # Finished frogs (most important)
+               0.35,    # Jump opportunities (good to have options)
+               -0.9,    # Distance to goal (very important)
+               -0.12,    # Clustering (want frogs to be together)
+              -0.05]       # Blocked frogs (not want frogs to have no way to move forward)
     
+    # Weights for late game: just reach the goal as fast as possible
+    if len(remaining_red) < 3 and len(remaining_blue) < 3:
+        weights = [5.0,    # Finished frogs (most important)
+            0.3,    # Jump opportunities (good to have options)
+            -2.0,    # Distance to goal (very important)
+            0.0,    # Clustering (want frogs to be together)
+            0.0]       # Blocked frogs (not want frogs to have no way to move forward)
+
     features = [finished_diff, jump_score_diff, total_dis_diff, internal_dis_diff, block_score_diff]
     
     # Apply weights to features

@@ -15,8 +15,9 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from constants import *
-from agent.state import *
+from minimax_utils import *
 from evaluation_functions import *
+from transposition_table import TranspositionTable, ZobristHashing, NodeType
 
 
 # Board state for slow minimax and random agent
@@ -1040,8 +1041,8 @@ class SmarterRandomAgent:
             print(f"Saving game state to {filename}")
             json.dump(state_data, f, indent=2)
 
-# Minimax agent with different evaluation function  
-class MiniMaxAgent:
+# Minimax agent with different evaluation function and incorrect pruning
+class InEfficientMiniMaxAgent:
     """
     This class implements a game-playing agent using the Minimax algorithm.
     """
@@ -1079,7 +1080,6 @@ class MiniMaxAgent:
 
         for move in possible_actions:
             cut_off = 3
-            self._num_nodes += 1
 
             is_grow = move is None 
             self._internal_state.apply_action(move, is_grow=is_grow)
@@ -1101,9 +1101,9 @@ class MiniMaxAgent:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
 
-            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: cut_off += 0
+            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: cut_off += 2
 
-            action_values[action] = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
+            action_values[action] = self._minimax(depth=1, is_pruning=PRUNING, cut_off=cut_off)
 
             self._internal_state.undo_action(is_grow=is_grow)
 
@@ -1113,15 +1113,15 @@ class MiniMaxAgent:
 
 
     def _minimax(self, depth: int = 0, alpha = -math.inf, beta = math.inf, is_pruning=True, cut_off=DEPTH_LIMIT) -> float:
-        
-        depth += 1
+    
+        self._num_nodes += 1
 
         # Base case: game over or depth limit reached
         if self._internal_state.game_over or depth >= cut_off:
             return self._evaluate()
 
         is_maximizing = self._internal_state._turn_color == RED
-
+    
         if is_maximizing:
             max_eval = -math.inf
 
@@ -1133,9 +1133,8 @@ class MiniMaxAgent:
                 is_grow = move is None
 
                 self._internal_state.apply_action(move, is_grow=is_grow)
-                self._num_nodes += 1
 
-                eval = self._minimax(depth, alpha, beta, is_pruning, cut_off=cut_off)
+                eval = self._minimax(depth+1, alpha, beta, is_pruning, cut_off=cut_off)
 
                 self._internal_state.undo_action(is_grow=is_grow)
 
@@ -1158,9 +1157,8 @@ class MiniMaxAgent:
                 is_grow = move is None
 
                 self._internal_state.apply_action(move, is_grow=is_grow)
-                self._num_nodes += 1
 
-                eval = self._minimax(depth, alpha, beta, is_pruning, cut_off=cut_off)
+                eval = self._minimax(depth+1, alpha, beta, is_pruning, cut_off=cut_off)
 
                 self._internal_state.undo_action(is_grow=is_grow)
 
@@ -1183,7 +1181,7 @@ class MiniMaxAgent:
         """
         Updates the agent's internal game state after a player takes their turn.
         """
-        print("Minimax Version 2 Nodes: ", self._num_nodes)
+        print("Incorrect Prunning MiniMax Nodes: ", self._num_nodes)
 
         if isinstance(action, MoveAction):
 
@@ -1270,6 +1268,480 @@ class MiniMaxAgent:
             print(f"Saving game state to {filename}")
             json.dump(state_data, f, indent=2)
 
+# Correct Minimax agent?
+class CorrectMiniMaxAgent:
+    """
+    This class implements a game-playing agent using the Minimax algorithm.
+    """
+
+    def __init__(self, color: PlayerColor, **referee: dict):
+        """
+        Initializes the agent with the given player color.
+        """
+        self._internal_state = AgentBoard()
+        self._is_maximizer = color == PlayerColor.RED
+        self._num_nodes = 0
+        self.a = ['a'] * 10000000 # space remaining
+        self.game_states = []
+        
+        print(f"Testing: I am playing as {'RED' if self._is_maximizer else 'BLUE'}")
+
+
+    def action(self, **referee: dict) -> Action:
+        """
+        Determines the best action to take using the Minimax algorithm.
+        """
+        def convert_to_directions(tuple_list: list[tuple[int, int]]) -> list[Direction]:
+            tuple_dir = tuple(Direction(t) for t in tuple_list)
+            if len(tuple_dir) == 1:
+                return tuple_dir[0]
+            else:
+                return tuple_dir
+
+        def convert_action(origin, directions):
+            converted_dir = convert_to_directions(directions)
+            return MoveAction(Coord(r=origin[0], c=origin[1]), converted_dir)
+
+        possible_actions = self._internal_state.generate_move_actions()
+        possible_actions.append(None)  # Represent the grow action as None
+        
+        best_action = None
+        best_value = -math.inf if self._is_maximizer else math.inf
+        alpha = -math.inf
+        beta = math.inf
+
+        for move in possible_actions:
+            max_depth = 5
+
+            is_grow = move is None 
+            self._internal_state.apply_action(move, is_grow=is_grow)
+            
+            if is_grow:
+                action = GrowAction()
+            else:
+                origin, directions, _ = move
+                action = convert_action(origin, directions)
+            
+            # Immediately return if the game is over
+            if self._internal_state.game_over:
+                self.save_game_state()
+                return action
+
+            # Dynamically adjust the search depth based on game state
+            mid_end_game = False
+            if not is_grow and move:
+                origin, _, _ = move
+                mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
+
+            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: 
+                max_depth += 1
+            elif referee["time_remaining"] < 60 and max_depth > 2: 
+                max_depth -= 1
+
+            # Pass alpha-beta values to minimax (starting with max_depth)
+            value = self._minimax(depth=max_depth, alpha=alpha, beta=beta, is_pruning=PRUNING)
+            
+            # Update best action based on maximizer/minimizer role
+            if self._is_maximizer and value > best_value:
+                best_value = value
+                best_action = action
+                alpha = max(alpha, best_value)
+            elif not self._is_maximizer and value < best_value:
+                best_value = value
+                best_action = action
+                beta = min(beta, best_value)
+                
+            self._internal_state.undo_action(is_grow=is_grow)
+
+        # Return the best action found
+        return best_action
+
+
+    def _minimax(self, depth: int, alpha = -math.inf, beta = math.inf, is_pruning=True) -> float:
+        """
+        Implementation of the Minimax algorithm with alpha-beta pruning.
+        
+        Args:
+            depth: Remaining depth to search (search stops when depth=0)
+            alpha: Best value for maximizer found so far along the path
+            beta: Best value for minimizer found so far along the path
+            is_pruning: Whether to use alpha-beta pruning
+            
+        Returns:
+            Best score for the current player
+        """
+
+        self._num_nodes += 1
+
+        # Base case: game over or depth limit reached
+        if self._internal_state.game_over or depth <= 1:
+            return self._evaluate()
+
+        is_maximizing = self._internal_state._turn_color == RED
+
+        if is_maximizing:
+            max_eval = -math.inf
+
+            # Generate all possible actions, including the grow action
+            actions = self._internal_state.generate_move_actions()
+            actions.append(None)  # Explicitly add the grow action
+
+            for move in actions:
+                is_grow = move is None
+
+                self._internal_state.apply_action(move, is_grow=is_grow)
+
+                # Pass the updated alpha value to deeper search levels with decremented depth
+                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning)
+                self._internal_state.undo_action(is_grow=is_grow)
+
+                max_eval = max(max_eval, eval_score)
+                
+                # Update alpha with best value found for maximizer
+                if is_pruning:
+                    alpha = max(alpha, max_eval)
+                    
+                    # Prune if we've found a value that's better than the best the minimizer can force
+                    if beta <= alpha:
+                        break
+
+            return max_eval
+        else:
+            min_eval = math.inf
+
+            # Generate all possible actions, including the grow action
+            actions = self._internal_state.generate_move_actions()
+            actions.append(None)  # Explicitly add the grow action
+
+            for move in actions:
+                is_grow = move is None
+
+                self._internal_state.apply_action(move, is_grow=is_grow)
+
+                # Pass the updated beta value to deeper search levels with decremented depth
+                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning)
+                self._internal_state.undo_action(is_grow=is_grow)
+
+                min_eval = min(min_eval, eval_score)
+                
+                # Update beta with best value found for minimizer
+                if is_pruning:
+                    beta = min(beta, min_eval)
+                    
+                    # Prune if we've found a value that's better than the best the maximizer can force
+                    if beta <= alpha:
+                        break
+        
+            return min_eval
+                
+
+    def _evaluate(self) -> float:
+        score = simple_eval(self._internal_state)
+        return score
+        
+
+    def update(self, color: PlayerColor, action: Action, **referee: dict):
+        """
+        Updates the agent's internal game state after a player takes their turn.
+        """
+        print("Correct MiniMaxAgent Nodes: ", self._num_nodes)
+
+        if isinstance(action, MoveAction):
+            origin = (action.coord.r, action.coord.c)
+            directions = action.directions
+
+            # Convert MoveAction to a tuple of properties
+            curr_coord = origin
+            converted_directions = []
+            for direction in directions:
+                direction_tuple = tuple(direction.value)
+                converted_directions.append(direction_tuple)
+                curr_coord = self._internal_state._get_destination(curr_coord, direction_tuple)[:2]
+
+            move = (origin, converted_directions, curr_coord)
+
+            self._internal_state.apply_action(move, False)
+
+        elif isinstance(action, GrowAction):
+            self._internal_state.apply_action(None, True)
+            
+        print("Time Remaining: ", referee["time_remaining"])
+        print("Space Remaining", referee["space_remaining"])
+        self.save_game_state()
+
+    def save_game_state(self):
+        """
+        Saves the current game state.
+        """
+        import copy
+        state_copy = copy.deepcopy(self._internal_state)
+        
+        if not hasattr(self, 'game_states'):
+            self.game_states = []
+            
+        self.game_states.append(state_copy)
+
+        if self._internal_state.game_over:
+            self.save_complete_game()
+
+
+    def save_complete_game(self, save_dir="game_states"):
+        """
+        Saves the complete game history to a JSON file.
+        """
+        import os
+        import json
+        
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Convert game state objects to JSON-serializable format
+        portable_states = []
+        for state in self.game_states:
+            portable_state = {}
+        
+            # Handle AgentBoard type
+            if hasattr(state, "pieces") and hasattr(state, "_red_frogs"):
+                # Include board representation
+                if hasattr(state.pieces, "tolist"):
+                    portable_state["board"] = state.pieces.tolist()
+                else:
+                    portable_state["board"] = state.pieces
+                
+                portable_state["turn_color"] = state._turn_color
+            
+            portable_states.append(portable_state)
+            
+        # Create the final data structure
+        state_data = {
+            "game_states": portable_states,
+            "winner": -self._internal_state._turn_color,
+            "board_size": 8,
+            "format_version": "1.0"
+        }  
+
+        # Find the next available file number
+        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and (f.endswith(".pkl") or f.endswith(".json"))]
+        file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
+        next_file_number = max(file_numbers) + 1 if file_numbers else 1
+        
+        filename = f"{save_dir}/game_state_{next_file_number}.json"
+        
+        with open(filename, "w") as f:
+            print(f"Saving game state to {filename}")
+            json.dump(state_data, f, indent=2)
+
+# Minimax agent using transposition table
+class TranspotitionMiniMaxAgent:
+    """
+    This class implements a game-playing agent using the Minimax algorithm.
+    """
+
+    def __init__(self, color: PlayerColor, **referee: dict):
+        """
+        Initializes the agent with the given player color.
+        """
+        self._internal_state = AgentBoard()
+        self._is_maximizer = color == PlayerColor.RED
+        self._num_nodes = 0
+        self.a = ['a'] * 10000000 # space remaining
+        self.game_states = []
+        self.transposition_table = TranspositionTable()
+        self.zobrist_hasher = ZobristHashing()
+        
+        print(f"Testing: I am playing as {'RED' if self._is_maximizer else 'BLUE'}")
+
+
+    def action(self, **referee: dict) -> Action:
+        """
+        Determines the best action to take using the Minimax algorithm.
+        """
+        def convert_to_directions(tuple_list: list[tuple[int, int]]) -> list[Direction]:
+            tuple_dir = tuple(Direction(t) for t in tuple_list)
+            if len(tuple_dir) == 1:
+                return tuple_dir[0]
+            else:
+                return tuple_dir
+
+        def convert_action(origin, directions):
+            converted_dir = convert_to_directions(directions)
+            return MoveAction(Coord(r=origin[0], c=origin[1]), converted_dir)
+
+        possible_actions = self._internal_state.generate_move_actions()
+        possible_actions.append(None)  # Represent the grow action as None
+        action_values = {}
+
+        for move in possible_actions:
+            cut_off = DEPTH_LIMIT
+            self._num_nodes += 1
+
+            is_grow = move is None 
+            self._internal_state.apply_action(move, is_grow=is_grow)
+            
+            if is_grow:
+                action = GrowAction()
+            else:
+                origin, directions, _ = move
+                action = convert_action(origin, directions)
+            
+            # Immediately return if the game is over
+            if self._internal_state.game_over:
+                print(self.transposition_table.get_stats())
+                return action
+
+            # Dynamically adjust the cut-off depth for minimax
+            mid_end_game = False
+            if not is_grow and move:
+                origin, _, _ = move
+                mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
+
+            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: cut_off += ADDITIONAL_DEPTH
+            elif referee["time_remaining"] < 60 and cut_off > 1: cut_off -= ADDITIONAL_DEPTH
+            
+            action_values[action] = self._minimax(is_pruning=PRUNING, cut_off=cut_off)
+
+            self._internal_state.undo_action(is_grow=is_grow)
+
+        print("Action Values: ", action_values)
+        print("Transposition Table Stats:", self.transposition_table.get_stats())
+
+        action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
+
+        return action
+
+
+    def _minimax(self, depth: int = 0, alpha = -math.inf, beta = math.inf, is_pruning=True, cut_off=DEPTH_LIMIT, **referee) -> float:
+        
+        # Before searching, check the transposition table for a stored entry
+        board_hash = self.zobrist_hasher.generate_zobrist_hash(self._internal_state.pieces)
+        tt_entry = self.transposition_table.lookup(board_hash)
+
+        # With your implementation, deeper searches have HIGHER depth values
+        # So we want entries from deeper searches (higher depth)
+        if tt_entry is not None and tt_entry['depth'] <= depth:
+            if tt_entry['node_type'] == NodeType.EXACT: 
+                return tt_entry['score']
+            elif tt_entry['node_type'] == NodeType.LOWER_BOUND and tt_entry['score'] > alpha:
+                alpha = tt_entry['score']
+            elif tt_entry['node_type'] == NodeType.UPPER_BOUND and tt_entry['score'] < beta:
+                beta = tt_entry['score']
+            
+            if alpha >= beta:
+                return tt_entry['score']
+
+        depth += 1
+        
+        # Base case: game over or depth limit reached
+        if self._internal_state.game_over or depth >= cut_off:  
+            score = self._evaluate()
+            # Store terminal state or evaluated leaf with exact score
+            hash_board = self.zobrist_hasher.generate_zobrist_hash(self._internal_state.pieces)
+            self.transposition_table.store(hash_board, depth, score, NodeType.EXACT, None)
+            return score
+
+        is_maximizing = self._internal_state._turn_color == RED
+
+        if is_maximizing:
+            max_eval = -math.inf
+
+            # Generate all possible actions, including the grow action
+            actions = self._internal_state.generate_move_actions()
+            actions.append(None)  # Explicitly add the grow action
+
+            for move in actions:
+                is_grow = move is None
+
+                self._internal_state.apply_action(move, is_grow=is_grow)
+                self._num_nodes += 1
+
+                eval = self._minimax(depth, alpha, beta, is_pruning, cut_off=cut_off)
+
+                max_eval = max(max_eval, eval)
+                alpha = max(alpha, max_eval)
+                
+
+                if is_pruning and beta <= max_eval:
+                    # beta-cutoff performed because the maximizer has a better option
+                    hash_board = self.zobrist_hasher.generate_zobrist_hash(self._internal_state.pieces)
+                    self.transposition_table.store(hash_board, depth, max_eval, NodeType.LOWER_BOUND, move) 
+
+                    self._internal_state.undo_action(is_grow=is_grow)
+                    
+                    break
+                
+                # Store the exact score
+                hash_board = self.zobrist_hasher.generate_zobrist_hash(self._internal_state.pieces)
+                self.transposition_table.store(hash_board, depth, eval, NodeType.EXACT, move)
+
+                self._internal_state.undo_action(is_grow=is_grow)
+
+            return max_eval
+        else:
+            min_eval = math.inf
+
+            # Generate all possible actions, including the grow action
+            actions = self._internal_state.generate_move_actions()
+            actions.append(None)  # Explicitly add the grow action
+
+            for move in actions:
+                is_grow = move is None
+
+                self._internal_state.apply_action(move, is_grow=is_grow)
+                self._num_nodes += 1
+
+                eval = self._minimax(depth, alpha, beta, is_pruning, cut_off=cut_off)
+
+                min_eval = min(min_eval, eval)
+                beta = min(beta, min_eval)
+
+                # Prune the branch
+                if is_pruning and min_eval <= alpha:
+                    # alpha-cutoff performed because the maximizer has a better option
+                    hash_board = self.zobrist_hasher.generate_zobrist_hash(self._internal_state.pieces)
+                    self.transposition_table.store(hash_board, depth, min_eval, NodeType.UPPER_BOUND, move)      
+                    self._internal_state.undo_action(is_grow=is_grow)
+                    break
+
+                # Store the exact score
+                hash_board = self.zobrist_hasher.generate_zobrist_hash(self._internal_state.pieces)
+                self.transposition_table.store(hash_board, depth, eval, NodeType.EXACT, move)
+                self._internal_state.undo_action(is_grow=is_grow)
+
+            return min_eval
+
+
+    def _evaluate(self) -> float:
+        score = simple_eval(self._internal_state)
+        return score
+        
+
+    def update(self, color: PlayerColor, action: Action, **referee: dict):
+        """
+        Updates the agent's internal game state after a player takes their turn.
+        """
+        print("Current Agent Nodes: ", self._num_nodes)
+
+        if isinstance(action, MoveAction):
+            origin = (action.coord.r, action.coord.c)
+            directions = action.directions
+
+            # Convert MoveAction to a tuple of properties
+            curr_coord = origin
+            converted_directions = []
+            for direction in directions:
+                direction_tuple = tuple(direction.value)
+                converted_directions.append(direction_tuple)
+                curr_coord = self._internal_state._get_destination(curr_coord, direction_tuple)[:2]
+
+            move = (origin, converted_directions, curr_coord)
+
+            self._internal_state.apply_action(move, False)
+
+        elif isinstance(action, GrowAction):
+            self._internal_state.apply_action(None, True)
+            
+        print("Time Remaining: ", referee["time_remaining"])
+        print("Space Remaining", referee["space_remaining"])
+
 # Minimax agent using XGBoost evaluation function
 class MLMiniMaxAgent:
     """
@@ -1306,16 +1778,17 @@ class MLMiniMaxAgent:
 
         possible_actions = self._internal_state.generate_move_actions()
         possible_actions.append(None)  # Represent the grow action as None
-        action_values = {}
+        
+        best_action = None
+        best_value = -math.inf if self._is_maximizer else math.inf
+        alpha = -math.inf
+        beta = math.inf
 
         for move in possible_actions:
-            cut_off = 3
-            self._num_nodes += 1
+            max_depth = 3
 
             is_grow = move is None 
             self._internal_state.apply_action(move, is_grow=is_grow)
-
-            multiplier = self.multiply(move, -self._internal_state._turn_color)
             
             if is_grow:
                 action = GrowAction()
@@ -1325,63 +1798,86 @@ class MLMiniMaxAgent:
             
             # Immediately return if the game is over
             if self._internal_state.game_over:
+                self.save_game_state()
                 return action
 
-            # Dynamically adjust the cut-off depth for minimax
+            # Dynamically adjust the search depth based on game state
             mid_end_game = False
             if not is_grow and move:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
+
+            if (mid_end_game) and referee["time_remaining"] >= 60: 
+                max_depth += 2
+            elif referee["time_remaining"] < 60 and max_depth > 2: 
+                max_depth -= 2
+
+            # Pass alpha-beta values to minimax (starting with max_depth)
+            multiplier = self.multiply(move, -self._internal_state._turn_color)
+            value = self._minimax(depth=max_depth, alpha=alpha, beta=beta, is_pruning=PRUNING) * multiplier
             
-            if (mid_end_game) and referee["time_remaining"] >= 60: cut_off += 0
-            elif referee["time_remaining"] < 60: cut_off -= 2
-
-            value = self._minimax(prev_move=move, is_pruning=PRUNING, cut_off=cut_off)
-
-            action_values[action] = value * multiplier
+            # Update best action based on maximizer/minimizer role
+            if self._is_maximizer and value > best_value:
+                best_value = value
+                best_action = action
+                alpha = max(alpha, best_value)
+            elif not self._is_maximizer and value < best_value:
+                best_value = value
+                best_action = action
+                beta = min(beta, best_value)
+                
             self._internal_state.undo_action(is_grow=is_grow)
 
-        print("Action Values: ", action_values)
-
-        action = max(action_values, key=action_values.get) if self._is_maximizer else min(action_values, key=action_values.get)
-
-        return action
+        # Return the best action found
+        return best_action
 
 
-    def _minimax(self, depth: int = 0, alpha = -math.inf, beta = math.inf, prev_move = None, is_pruning=True, cut_off=DEPTH_LIMIT) -> float:
+    def _minimax(self, depth: int, alpha = -math.inf, beta = math.inf, is_pruning=True) -> float:
+        """
+        Implementation of the Minimax algorithm with alpha-beta pruning.
         
-        depth += 1
-        is_maximizing = self._internal_state._turn_color == RED
-        
+        Args:
+            depth: Remaining depth to search (search stops when depth=0)
+            alpha: Best value for maximizer found so far along the path
+            beta: Best value for minimizer found so far along the path
+            is_pruning: Whether to use alpha-beta pruning
+            
+        Returns:
+            Best score for the current player
+        """
         # Base case: game over or depth limit reached
-        if self._internal_state.game_over or depth >= cut_off:    
-            return self._evaluate() 
+        self._num_nodes += 1
+        if self._internal_state.game_over or depth <= 0:
+            return self._evaluate()
+
+        is_maximizing = self._internal_state._turn_color == RED
 
         if is_maximizing:
             max_eval = -math.inf
 
             # Generate all possible actions, including the grow action
             actions = self._internal_state.generate_move_actions()
-            actions.append(None)  # Represent the grow action as None
+            actions.append(None)  # Explicitly add the grow action
 
             for move in actions:
                 is_grow = move is None
 
                 self._internal_state.apply_action(move, is_grow=is_grow)
-                self._num_nodes += 1
 
-                # set multiplier based on the type of move
+                # Pass the updated alpha value to deeper search levels with decremented depth
                 multiplier = self.multiply(move, -self._internal_state._turn_color)
-
-                eval = self._minimax(depth, alpha, beta, move, is_pruning, cut_off=cut_off) * multiplier
-
+                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning) * multiplier
                 self._internal_state.undo_action(is_grow=is_grow)
 
-                max_eval = max(max_eval, eval)
-                alpha = max(alpha, max_eval)
-
-                if is_pruning and beta <= max_eval:
-                    break
+                max_eval = max(max_eval, eval_score)
+                
+                # Update alpha with best value found for maximizer
+                if is_pruning:
+                    alpha = max(alpha, max_eval)
+                    
+                    # Prune if we've found a value that's better than the best the minimizer can force
+                    if beta <= alpha:
+                        break
 
             return max_eval
         else:
@@ -1389,30 +1885,35 @@ class MLMiniMaxAgent:
 
             # Generate all possible actions, including the grow action
             actions = self._internal_state.generate_move_actions()
-            actions.append(None)  # Represent the grow action as None
+            actions.append(None)  # Explicitly add the grow action
 
             for move in actions:
                 is_grow = move is None
 
                 self._internal_state.apply_action(move, is_grow=is_grow)
-                self._num_nodes += 1
 
-                # set multiplier based on the type of move
+                # Pass the updated beta value to deeper search levels with decremented depth
                 multiplier = self.multiply(move, -self._internal_state._turn_color)
-
-                eval = self._minimax(depth, alpha, beta, move, is_pruning, cut_off=cut_off) * multiplier
-
+                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning) * multiplier
                 self._internal_state.undo_action(is_grow=is_grow)
 
-                min_eval = min(min_eval, eval)
-                beta = min(beta, min_eval)
-
-                # Prune the branch
-                if is_pruning and min_eval <= alpha:
-                    break
+                min_eval = min(min_eval, eval_score)
+                
+                # Update beta with best value found for minimizer
+                if is_pruning:
+                    beta = min(beta, min_eval)
+                    
+                    # Prune if we've found a value that's better than the best the maximizer can force
+                    if beta <= alpha:
+                        break
         
             return min_eval
                 
+
+    def _evaluate(self) -> float:
+        score = xgboost_eval(self._internal_state, self._is_maximizer)
+        return score
+    
 
     def multiply(self, move, turn_color):
         multiplier = 1
@@ -1434,18 +1935,14 @@ class MLMiniMaxAgent:
         else:
             multiplier = 1.8 if turn_color == 1 else 1/1.8
 
-        return multiplier
+        return multiplier  
 
-    def _evaluate(self) -> float:
-        score  = xgboost_eval(self._internal_state, self._is_maximizer)
-        return score
-        
-    
+
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         """
         Updates the agent's internal game state after a player takes their turn.
         """
-        print("ML Agent Nodes: ", self._num_nodes)
+        print("MLMiniMaxAgent Nodes: ", self._num_nodes)
 
         if isinstance(action, MoveAction):
             origin = (action.coord.r, action.coord.c)
@@ -1459,8 +1956,6 @@ class MLMiniMaxAgent:
                 converted_directions.append(direction_tuple)
                 curr_coord = self._internal_state._get_destination(curr_coord, direction_tuple)[:2]
 
-            # print(converted_directions)
-            
             move = (origin, converted_directions, curr_coord)
 
             self._internal_state.apply_action(move, False)
@@ -1470,3 +1965,65 @@ class MLMiniMaxAgent:
             
         print("Time Remaining: ", referee["time_remaining"])
         print("Space Remaining", referee["space_remaining"])
+        self.save_game_state()
+
+    def save_game_state(self):
+        """
+        Saves the current game state.
+        """
+        import copy
+        state_copy = copy.deepcopy(self._internal_state)
+        
+        if not hasattr(self, 'game_states'):
+            self.game_states = []
+            
+        self.game_states.append(state_copy)
+
+        if self._internal_state.game_over:
+            self.save_complete_game()
+
+
+    def save_complete_game(self, save_dir="game_states"):
+        """
+        Saves the complete game history to a JSON file.
+        """
+        import os
+        import json
+        
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Convert game state objects to JSON-serializable format
+        portable_states = []
+        for state in self.game_states:
+            portable_state = {}
+        
+            # Handle AgentBoard type
+            if hasattr(state, "pieces") and hasattr(state, "_red_frogs"):
+                # Include board representation
+                if hasattr(state.pieces, "tolist"):
+                    portable_state["board"] = state.pieces.tolist()
+                else:
+                    portable_state["board"] = state.pieces
+                
+                portable_state["turn_color"] = state._turn_color
+            
+            portable_states.append(portable_state)
+            
+        # Create the final data structure
+        state_data = {
+            "game_states": portable_states,
+            "winner": -self._internal_state._turn_color,
+            "board_size": 8,
+            "format_version": "1.0"
+        }  
+
+        # Find the next available file number
+        existing_files = [f for f in os.listdir(save_dir) if f.startswith("game_state_") and (f.endswith(".pkl") or f.endswith(".json"))]
+        file_numbers = [int(f.split("_")[2].split(".")[0]) for f in existing_files]
+        next_file_number = max(file_numbers) + 1 if file_numbers else 1
+        
+        filename = f"{save_dir}/game_state_{next_file_number}.json"
+        
+        with open(filename, "w") as f:
+            print(f"Saving game state to {filename}")
+            json.dump(state_data, f, indent=2)

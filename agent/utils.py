@@ -7,7 +7,6 @@ from referee.game.constants import *
 from referee.game.board import Board, CellState
 
 
-
 class BoardState:
     """
     Represents the state of the game, including the board and the positions
