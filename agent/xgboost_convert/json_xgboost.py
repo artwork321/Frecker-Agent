@@ -24,7 +24,7 @@ class JSON_XGBoost:
         # Use the cached model if available, otherwise load it
         if JSON_XGBoost._cached_model is None:
             start_time = time.time()
-            with open(os.path.join(os.path.dirname(__file__), '../model', 'xg_model.json'), 'r') as f:
+            with open(os.path.join(os.path.dirname(__file__), '../model', 'model2.json'), 'r') as f:
                 JSON_XGBoost._cached_model = json.load(f)
             
             # Preprocess the model into a more efficient format
@@ -57,6 +57,21 @@ class JSON_XGBoost:
         JSON_XGBoost._is_preprocessed = True
 
     def compute_features(self, board, player_color=1):
+        player_features = self.compute_features_single_frog(board, player_color=player_color)
+        opp_features = self.compute_features_single_frog(board, player_color=-player_color)
+        features = np.concatenate([list(player_features.values()), list(opp_features.values())])
+
+        delta_n_frogs_at_goal = player_features["#frogs at goal row"] - opp_features["#frogs at goal row"]
+        delta_avg_dist = player_features["avg min euclid dist to goal"] - opp_features["avg min euclid dist to goal"]
+        delta_target_jump = player_features["target jump ratio"] - opp_features["target jump ratio"]
+        delta_interaction = player_features["interaction score"] - opp_features["interaction score"]
+        delta_centrality = player_features["col centrality score"] - opp_features["col centrality score"]
+        features = np.concatenate([features, [delta_n_frogs_at_goal, delta_avg_dist, delta_target_jump, 
+                                            delta_interaction, delta_centrality]])
+
+        return features
+
+    def compute_features_single_frog(self, board, player_color=1):
         n = board.shape[0]
         goal_row = 0 if player_color == -1 else n - 1
         frog_positions = list(zip(*np.where(board == player_color))) # TODO can retrieve if this is part of Board class
@@ -72,7 +87,7 @@ class JSON_XGBoost:
         goal_pad_positions = []
         unoccupied_goal_positions = []
         for c in range(n):
-            if board[goal_row, c] == LILYPAD:
+            if board[goal_row, c] == PAD:
                 goal_pad_positions.append((goal_row, c))
                 unoccupied_goal_positions.append((goal_row, c))
             elif board[goal_row, c] == EMPTY:
@@ -91,13 +106,11 @@ class JSON_XGBoost:
         avg_min_dist_to_goal = sum(min_dists_to_goal) / N_FROGS
 
         # Setup counters     
-        jumpable = blocked = edge = assistable = near_goal = reachable_pads = grow_needed = 0
-        n_blocked_target_dirs = n_possible_target_jumps = 0
-        n_sideway_moves = n_sideway_jumps = 0
+        jumpable = edge = assistable = near_goal = reachable_pads = grow_needed = 0
+        n_possible_target_jumps = 0
 
         for r, c in frog_not_at_goal_positions:
             has_jump = False
-            is_blocked = False
             pad_nearby = False
 
             if c in [0, n - 1]:
@@ -110,74 +123,39 @@ class JSON_XGBoost:
                 r2, c2 = r + 2 * dr, c + 2 * dc
 
                 if 0 <= r1 < n and 0 <= c1 < n:
-                    if board[r1, c1] == LILYPAD:
+                    if board[r1, c1] == PAD:
                         pad_nearby = True
                         reachable_pads += 1
-
-                    if board[r1, c1] in [-player_color, player_color] \
-                        and not (0 <= r2 < n and 0 <= c2 < n): 
-                        is_blocked = True
-                        n_blocked_target_dirs += 1
                     
                     r_back, c_back = r - dr, c - dc
                     if 0 <= r_back < n and 0 <= c_back < n:
-                        if board[r_back, c_back] == player_color and board[r1, c1] == LILYPAD:
+                        if board[r_back, c_back] == player_color and board[r1, c1] == PAD:
                             assistable += 1
 
                 if 0 <= r2 < n and 0 <= c2 < n:
                     if board[r1, c1] in [-player_color, player_color]:
-                        if board[r2, c2] == LILYPAD:
+                        if board[r2, c2] == PAD:
                             pad_nearby = True
                             reachable_pads += 1
                             has_jump = True
                             n_possible_target_jumps += 1
-                        else:
-                            is_blocked = True
-                            n_blocked_target_dirs += 1
 
             if has_jump:
                 jumpable += 1
-            if is_blocked:
-                blocked += 1
             if not pad_nearby:
                 grow_needed += 1
 
-        for r, c in frog_at_goal_positions:
-            for dr, dc in DIRECTIONS_SIDEWAY:
-                r1, c1 = r + dr, c + dc
-                r2, c2 = r + 2 * dr, c + 2 * dc
-                
-                if 0 <= r1 < n and 0 <= c1 < n:
-                    if board[r1, c1] == LILYPAD:
-                        n_sideway_moves += 1
-
-                if 0 <= r2 < n and 0 <= c2 < n:
-                    if board[r1, c1] in [-player_color, player_color] and board[r2, c2] == LILYPAD:
-                        n_sideway_jumps += 1
-
         # Lily pad stats
-        mid_row = int(np.floor((n-1)/2)) + 1
-        if player_color == RED:
-            half_board_total_pads = np.sum(board[mid_row:, :] == LILYPAD)
-        else:
-            half_board_total_pads = np.sum(board[:mid_row, :] == LILYPAD)
-        half_board_pad_coverage = half_board_total_pads / (n * n / 2)
         avg_reachable_pads = reachable_pads / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
         grow_needed_ratio = grow_needed / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-
         goal_pad_ratio = len(goal_pad_positions) / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
 
         # Other ratios
         jumpable_ratio = jumpable / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-        blocked_ratio = blocked / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
         edge_ratio = edge / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
         near_goal_ratio = near_goal / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
         assistable_ratio = assistable / n_frogs_not_at_goal if n_frogs_not_at_goal else 0  
-        
         target_jump_ratio = n_possible_target_jumps / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-        target_blocked_ratio = n_blocked_target_dirs / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-        sideway_move_ratio = n_sideway_moves / n_frogs_at_goal if n_frogs_at_goal else 0
-        sideway_jump_ratio = n_sideway_jumps / n_frogs_at_goal  if n_frogs_at_goal else 0
 
         # Spread and centrality
         if frog_not_at_goal_positions:
@@ -191,33 +169,28 @@ class JSON_XGBoost:
             spread_var = 0.0
             spread_rms = 1.0
 
-        inverse_spread = 1 / (1 + spread_rms)
         interaction = avg_dist * spread_rms
         centrality = np.mean([abs(col - (n-1)/2) for col in cols]) if cols else 0
 
-        return np.array([
-            avg_dist,             # 0
-            jumpable_ratio,       # 1
-            spread_var,           # 2
-            inverse_spread,       # 3
-            interaction,          # 4
-            blocked_ratio,        # 5
-            edge_ratio,           # 6
-            centrality,           # 7
-            assistable_ratio,     # 8
-            near_goal_ratio,      # 9
-            half_board_pad_coverage,         # 10
-            avg_reachable_pads,         # 11
-            grow_needed_ratio,           # 12
-            target_jump_ratio,     # 13
-            target_blocked_ratio,       # 14
-            sideway_move_ratio,      # 15
-            sideway_jump_ratio,      # 16
-            n_frogs_at_goal,       # 17
-            goal_pad_ratio,         # 18
-            avg_min_dist_to_goal,   # 19
-        ])
-    
+        features = {
+            "#frogs at goal row": n_frogs_at_goal,                    # 0
+            "avg row dist to goal": avg_dist,                         # 1
+            "avg min euclid dist to goal": avg_min_dist_to_goal,      # 2
+            "near goal ratio": near_goal_ratio,                       # 3
+            "jumpable ratio": jumpable_ratio,                         # 4
+            "interaction score": interaction,                         # 5
+            "edge position ratio": edge_ratio,                        # 6
+            "col centrality score": centrality,                       # 7
+            "spread variance": spread_var,                            # 8
+            "assistable ratio": assistable_ratio,                     # 9
+            "avg reachable pads": avg_reachable_pads,                 # 10
+            "grow needed ratio": grow_needed_ratio,                   # 11
+            "target jump ratio": target_jump_ratio,                   # 12
+            "goal pad ratio": goal_pad_ratio,                         # 13
+        }
+
+        return features
+
 
     def predict_single_tree(self, tree, features):
         """Optimized single tree traversal using NumPy arrays"""
@@ -243,9 +216,7 @@ class JSON_XGBoost:
         """Optimized prediction using all trees"""
 
         # Compute features only once for both player and opponent
-        red_feature = self.compute_features(board, RED)
-        blue_feature = self.compute_features(board, BLUE)
-        features = np.concatenate([red_feature, blue_feature])
+        features = self.compute_features(board)
         
         sum_pred = 0
         for tree in self.trees[:maximum_trees]:

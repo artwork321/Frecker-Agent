@@ -21,6 +21,7 @@ PAD = 2
 EMPTY = 0
 
 DEFAULT = 1
+N_BOARD = 8
 
 class Board():
      # list of all 8 directions on the board, as (x,y) offsets
@@ -38,9 +39,9 @@ class Board():
                         (0, -1), # left
                         (0, 1)]} # right
 
-    __opp_direction = {(-1, 0): (1, 0), # up
-                        (-1, -1): (1, -1), # upleft
-                        (-1, 1): (1, 1), # upright
+    __opp_direction = {(1, 0): (-1, 0), # up
+                        (1, -1): (-1, -1), # upleft
+                        (1, 1): (-1, 1), # upright
                         (0, -1): (0, -1), # left
                         (0, 1): (0, 1)} # right
 
@@ -216,6 +217,9 @@ class Board():
 
         # if color < 0:
         #     direction = type(self).__opp_direction[direction]
+        # print(f"player cells: {self.player_cells}")
+        # print(f"board:\n {self.pieces}")
+
         x, y = origin
         self.pieces[x][y] = EMPTY
 
@@ -267,15 +271,22 @@ class Board():
                     self.pieces[x][y] = PAD
         # import pdb; pdb.set_trace()
         
-    def execute_multiple_moves(self, origin, directions, color):
+    def execute_multiple_moves(self, origin, directions, is_red, color=-1):
         origin = (origin.r, origin.c)
+        if is_red:
+            origin = ((N_BOARD - 1) - origin[0], origin[1])
+            
+        # print(f"origin {origin}; is red {is_red}")
+            
         if isinstance(directions, Direction):
-            directions = (directions.r, directions.c)
-            self.execute_move(origin, directions, color)
+            direction = (directions.r, directions.c)
+            if is_red:
+                direction = type(self).__opp_direction[direction]
+            self.execute_move(origin, direction, color)
         else:
             x, y = origin
             self.pieces[x][y] = EMPTY
-            x, y = self._get_multi_jump_endpoint(origin, directions)
+            x, y = self._get_multi_jump_endpoint(origin, directions, is_red)
 
             if self.pieces[x][y] != PAD:
                 import pdb; pdb.set_trace()
@@ -331,10 +342,13 @@ class Board():
         return list(map(sum, zip(origin, direction)))
         # endpoint = (origin[0]+direction[0], origin[1]+direction[1])
     
-    def _get_multi_jump_endpoint(self, origin, directions):
+    def _get_multi_jump_endpoint(self, origin, directions, is_red):
         x, y = origin
         for direction in directions:
-            x, y = x + direction.r*2, y + direction.c*2
+            direction = (direction.r, direction.c)
+            if is_red:
+                direction = type(self).__opp_direction[direction]
+            x, y = x + direction[0]*2, y + direction[1]*2
         return x, y
 
     def _is_valid_square(self, x, y):

@@ -1,7 +1,3 @@
 portable_game_states/
 game_states/
-__pycache__/
-agent/__pycache__/
-agent/MCTS_XG/__pycache__/
-agent/xgboost_convert/__pycache__/
 **/__pycache__/

@@ -29,6 +29,18 @@ DIRECTIONS_SIDEWAY = [(0, -1), # left
                     (0, 1)] # right
 
 def compute_features(board, player_color=1):
+    player_features = compute_features_single_frog(board, player_color=player_color)
+    opp_features = compute_features_single_frog(board, player_color=-player_color)
+    features = np.concatenate([list(player_features.values()), list(opp_features.values())])
+
+    delta_n_frogs_at_goal = player_features["#frogs at goal row"] - opp_features["#frogs at goal row"]
+    delta_avg_dist = player_features["avg min euclid dist to goal"] - opp_features["avg min euclid dist to goal"]
+    delta_target_jump = player_features["target jump ratio"] - opp_features["target jump ratio"]
+    features = np.concatenate([features, [delta_n_frogs_at_goal, delta_avg_dist, delta_target_jump]])
+
+    return features
+
+def compute_features_single_frog(board, player_color=1):
     n = board.shape[0]
     goal_row = 0 if player_color == -1 else n - 1
     frog_positions = list(zip(*np.where(board == player_color))) # TODO can retrieve if this is part of Board class
@@ -63,13 +75,11 @@ def compute_features(board, player_color=1):
     avg_min_dist_to_goal = sum(min_dists_to_goal) / N_FROGS
 
     # Setup counters     
-    jumpable = blocked = edge = assistable = near_goal = reachable_pads = grow_needed = 0
-    n_blocked_target_dirs = n_possible_target_jumps = 0
-    n_sideway_moves = n_sideway_jumps = 0
+    jumpable = edge = assistable = near_goal = reachable_pads = grow_needed = 0
+    n_possible_target_jumps = 0
 
     for r, c in frog_not_at_goal_positions:
         has_jump = False
-        is_blocked = False
         pad_nearby = False
 
         if c in [0, n - 1]:
@@ -85,11 +95,6 @@ def compute_features(board, player_color=1):
                 if board[r1, c1] == PAD:
                     pad_nearby = True
                     reachable_pads += 1
-
-                if board[r1, c1] in [-player_color, player_color] \
-                    and not (0 <= r2 < n and 0 <= c2 < n): 
-                    is_blocked = True
-                    n_blocked_target_dirs += 1
                 
                 r_back, c_back = r - dr, c - dc
                 if 0 <= r_back < n and 0 <= c_back < n:
@@ -103,53 +108,23 @@ def compute_features(board, player_color=1):
                         reachable_pads += 1
                         has_jump = True
                         n_possible_target_jumps += 1
-                    else:
-                        is_blocked = True
-                        n_blocked_target_dirs += 1
 
         if has_jump:
             jumpable += 1
-        if is_blocked:
-            blocked += 1
         if not pad_nearby:
             grow_needed += 1
 
-    for r, c in frog_at_goal_positions:
-        for dr, dc in DIRECTIONS_SIDEWAY:
-            r1, c1 = r + dr, c + dc
-            r2, c2 = r + 2 * dr, c + 2 * dc
-            
-            if 0 <= r1 < n and 0 <= c1 < n:
-                if board[r1, c1] == PAD:
-                    n_sideway_moves += 1
-
-            if 0 <= r2 < n and 0 <= c2 < n:
-                if board[r1, c1] in [-player_color, player_color] and board[r2, c2] == PAD:
-                    n_sideway_jumps += 1
-
     # Lily pad stats
-    mid_row = int(np.floor((n-1)/2)) + 1
-    if player_color == RED:
-        half_board_total_pads = np.sum(board[mid_row:, :] == PAD)
-    else:
-        half_board_total_pads = np.sum(board[:mid_row, :] == PAD)
-    half_board_pad_coverage = half_board_total_pads / (n * n / 2)
     avg_reachable_pads = reachable_pads / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
     grow_needed_ratio = grow_needed / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-
     goal_pad_ratio = len(goal_pad_positions) / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
 
     # Other ratios
     jumpable_ratio = jumpable / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    blocked_ratio = blocked / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
     edge_ratio = edge / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
     near_goal_ratio = near_goal / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
     assistable_ratio = assistable / n_frogs_not_at_goal if n_frogs_not_at_goal else 0  
-    
     target_jump_ratio = n_possible_target_jumps / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    target_blocked_ratio = n_blocked_target_dirs / n_frogs_not_at_goal if n_frogs_not_at_goal else 0
-    sideway_move_ratio = n_sideway_moves / n_frogs_at_goal if n_frogs_at_goal else 0
-    sideway_jump_ratio = n_sideway_jumps / n_frogs_at_goal  if n_frogs_at_goal else 0
 
     # Spread and centrality
     if frog_not_at_goal_positions:
@@ -163,31 +138,58 @@ def compute_features(board, player_color=1):
         spread_var = 0.0
         spread_rms = 1.0
 
-    inverse_spread = 1 / (1 + spread_rms)
     interaction = avg_dist * spread_rms
     centrality = np.mean([abs(col - (n-1)/2) for col in cols]) if cols else 0
 
-    return np.array([
-        avg_dist,             # 0
-        jumpable_ratio,       # 1
-        spread_var,           # 2
-        inverse_spread,       # 3
-        interaction,          # 4
-        blocked_ratio,        # 5
-        edge_ratio,           # 6
-        centrality,           # 7
-        assistable_ratio,     # 8
-        near_goal_ratio,      # 9
-        half_board_pad_coverage,         # 10
-        avg_reachable_pads,         # 11
-        grow_needed_ratio,           # 12
-        target_jump_ratio,     # 13
-        target_blocked_ratio,       # 14
-        sideway_move_ratio,      # 15
-        sideway_jump_ratio,      # 16
-        n_frogs_at_goal,       # 17
-        goal_pad_ratio,         # 18
-        avg_min_dist_to_goal,   # 19
-             # 20
-              # 21
-    ])
+    features = {
+        "#frogs at goal row": n_frogs_at_goal,                    # 0
+        "avg row dist to goal": avg_dist,                         # 1
+        "avg min euclid dist to goal": avg_min_dist_to_goal,      # 2
+        "near goal ratio": near_goal_ratio,                       # 3
+        "jumpable ratio": jumpable_ratio,                         # 4
+        "interaction score": interaction,                         # 5
+        "edge position ratio": edge_ratio,                        # 6
+        "col centrality score": centrality,                       # 7
+        "spread variance": spread_var,                            # 8
+        "assistable ratio": assistable_ratio,                     # 9
+        "avg reachable pads": avg_reachable_pads,                 # 10
+        "grow needed ratio": grow_needed_ratio,                   # 11
+        "target jump ratio": target_jump_ratio,                   # 12
+        "goal pad ratio": goal_pad_ratio,                         # 13
+    }
+
+    return features
+
+FEATURE_NAMES = [
+    "#frogs at goal row",
+    "avg row dist to goal",
+    "avg min euclid dist to goal",
+    "near goal ratio",
+    "jumpable ratio",
+    "interaction score",
+    "edge position ratio",
+    "col centrality score",
+    "spread variance",
+    "assistable ratio",
+    "avg reachable pads",
+    "grow needed ratio",
+    "target jump ratio",
+    "goal pad ratio",
+    "opp's #frogs at goal row",
+    "opp's avg row dist to goal",
+    "opp's avg min euclid dist to goal",
+    "opp's near goal ratio",
+    "opp's jumpable ratio",
+    "opp's interaction score",
+    "opp's edge position ratio",
+    "opp's col centrality score",
+    "opp's spread variance",
+    "opp's assistable ratio",
+    "opp's avg reachable pads",
+    "opp's grow needed ratio",
+    "opp's target jump ratio",
+    "opp's goal pad ratio",
+    "delta #frogs at goal",
+    "delta avg euclid dist",
+    "delta target jump ratio"
+]
