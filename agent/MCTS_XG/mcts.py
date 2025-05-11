@@ -5,6 +5,7 @@ import numpy as np
 
 from .game import FreckersGame
 from agent.xgboost_convert.json_xgboost import JSON_XGBoost
+from .mcts_cache import MCTSCache
 
 EPS = 1e-8
 MAX_DEPTH = 1000
@@ -35,6 +36,8 @@ class MCTS():
 
         self.Es = {}  # stores game.getGameEnded ended for board s
         self.Vs = {}  # stores game.getValidMoves for board s
+
+        self.cache = MCTSCache()
         
         self.cpuct = 1
         
@@ -130,8 +133,18 @@ class MCTS():
             return -self.Es[s]
 
         if s not in self.Ps:
-            # leaf node
-            self.Ps[s], v, valids = self.getPredictions(canonicalBoard, depth) 
+
+            # check if we have a cached prediction
+            cache = self.cache.get(canonicalBoard)
+
+            if cache is not None:
+                self.Ps[s], v, valids = cache
+            else:
+                # leaf node
+                self.Ps[s], v, valids = self.getPredictions(canonicalBoard, depth) 
+                # store the prediction in the cache
+                self.cache.set(canonicalBoard, self.Ps[s], v, valids)
+
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
                 self.Ps[s] /= sum_Ps_s  # renormalize

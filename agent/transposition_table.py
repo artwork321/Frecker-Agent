@@ -9,7 +9,7 @@ class NodeType(Enum):
     UPPER_BOUND = 2  # The true score is at most this value
 
 class TranspositionTable:
-    def __init__(self, size=500000):
+    def __init__(self, size=300000):
         """Initialize an empty transposition table with given size capacity"""
         self.table = {}
         self.size = size

@@ -20,7 +20,7 @@ from minimax_utils import *
 from evaluation_functions import *
 from transposition_table import TranspositionTable, ZobristHashing, NodeType
 
-# Chosen agent 
+
 class Agent:
     """
     This class implements a game-playing agent using the Minimax algorithm.
@@ -71,6 +71,7 @@ class Agent:
 
             is_grow = move is None 
             self._internal_state.apply_action(move, is_grow=is_grow)
+            multiplier = self.multiply(move, -self._internal_state._turn_color)
             
             if is_grow:
                 action = GrowAction()
@@ -108,7 +109,7 @@ class Agent:
             # If no TT entry found or TT disabled, perform search
             if value is None:
                 # Call minimax with alpha-beta values
-                value = self._minimax(depth=max_depth, alpha=alpha, beta=beta, is_pruning=PRUNING)
+                value = self._minimax(depth=max_depth-1, alpha=alpha, beta=beta, is_pruning=PRUNING) * multiplier
             
             # Update best action based on maximizer/minimizer role
             if self._is_maximizer and value > best_value:
@@ -176,7 +177,7 @@ class Agent:
         self._num_nodes += 1
                 
         # Base case: game over or depth limit reached - depth of 3 means 3-ply
-        if self._internal_state.game_over or depth <= 1:
+        if self._internal_state.game_over or depth <= 0:
             score = self._evaluate()
             # Store terminal state with exact score if using transposition table
             if use_tt:
@@ -205,7 +206,8 @@ class Agent:
                 self._internal_state.apply_action(move, is_grow=is_grow)
                 
                 # Pass the updated alpha value to deeper search levels with decremented depth
-                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning)
+                multiplier = self.multiply(move, -self._internal_state._turn_color)
+                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning) * multiplier
                 self._internal_state.undo_action(is_grow=is_grow)
 
                 if eval_score > max_eval:
@@ -245,9 +247,10 @@ class Agent:
                 is_grow = move is None
 
                 self._internal_state.apply_action(move, is_grow=is_grow)
+                multiplier = self.multiply(move, -self._internal_state._turn_color)
                 
                 # Pass the updated beta value to deeper search levels with decremented depth
-                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning)
+                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning) * multiplier
                 self._internal_state.undo_action(is_grow=is_grow)
 
                 if eval_score < min_eval:
@@ -272,9 +275,33 @@ class Agent:
                 
 
     def _evaluate(self) -> float:
-        score = simple_eval(self._internal_state)
+        score = xgboost_eval(self._internal_state, self._is_maximizer)
         return score
-        
+    
+    def multiply(self, move, turn_color):
+        multiplier = 1
+
+        if move is not None:
+            origin, directions, endpoint = move
+            
+            jump_times = len(directions)
+            is_multiple_jump = jump_times > 1
+            is_near_goal = origin[0] >= 5 if turn_color == 1 else origin[0] <= 2
+            is_goal = endpoint[0] == 7 if turn_color == 1 else endpoint[0] == 0
+            is_at_goal = origin[0] == 7 if turn_color == 1 else origin[0] == 0
+            is_near_start = origin[0] <= 2 if turn_color == 1 else origin[0] >= 5
+
+            if is_multiple_jump and abs(endpoint[0] - origin[0]) > 1 and origin[0] : # a forward multiple jump forward
+                multiplier = 5**len(directions) if turn_color == 1 else 1/(5**len(directions))
+            elif is_near_goal and abs(endpoint[0] - origin[0]) >= 1: # near goal and not at goal then encourage move to goal 
+                multiplier = 10 if turn_color == 1 else 1/10
+            elif is_near_start and abs(endpoint[0] - origin[0]) >= 1: # frog is not moving so much so encourage to move
+                multiplier = 5 if turn_color == 1 else 1/5
+            elif abs(endpoint[0] - origin[0]) > 1: # encourage jumping forward
+                multiplier = 3 if turn_color == 1 else 1/3
+
+
+        return multiplier 
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         """
