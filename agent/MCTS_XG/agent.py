@@ -40,32 +40,19 @@ class MCTS_Agent:
         Any setup and/or precomputation should be done here.
         """
         self._color = color
-        match color:
-            case PlayerColor.RED:
-                print("Testing: I am playing as RED")
-            case PlayerColor.BLUE:
-                print("Testing: I am playing as BLUE")
-        
         self.board = Board(N_BOARD)
-        # print(f"cells: {self.board.player_cells}")
-        # print(f"board:\n {self.board.pieces}")
-        # if self._color == PlayerColor.BLUE:
-        #     self.board.switch_perspectives() # agent always treats itself as a RED player
-        #     print(f"cells: {self.board.player_cells}")
-        #     print(f"board:\n {self.board.pieces}")
-
         self.game = FreckersGame(N_BOARD)
         model = JSON_XGBoost()
-        args = dotdict({'numMCTSSims_start': 30, 'numMCTSSims_mid': 80, 'numMCTSSims_end': 60, 
-                        'mid': 15, 'end': 45,
-                        'cpuct_start': 1.5, 'cpuct_mid': 1.75, 'cpuct_end': 1,
+        args = dotdict({'numMCTSSims_start': 40, 'numMCTSSims_mid': 75, 'numMCTSSims_end': 30, 
+                        'mid': 15, 'end': 50,
+                        'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
 
                         'grow_multiplier': 1,
                         'target_move_multiplier': 1,
                         'target_jump_multiplier': 3,
                         'target_opp_jump_multiplier': 5})
         self.mcts = MCTS(self.game, model, args)
-        self.step = 1
+        self.step = 0
 
     def action(self, **referee: dict) -> Action:
         """
@@ -82,8 +69,7 @@ class MCTS_Agent:
         origin, directions = self._decode_action(action)
 
         self.board.setPieces(next_state)
-        print(f"MCTS dirs {directions}")
-        print(f"MCST Cache: ", self.mcts.cache.get_stats())
+        # print(f"MCST Cache: ", self.mcts.cache.get_stats())
         return MoveAction(origin, directions)
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
@@ -98,21 +84,16 @@ class MCTS_Agent:
 
         match action:
             case MoveAction(coord, dirs):
-                dirs_text = ", ".join([str(dir) for dir in dirs])
-                print(f"Testing: {color} played MOVE action:")
-                print(f"  Coord: {coord}")
-                print(f"  Directions: {dirs_text}")
                 is_red = (color == PlayerColor.RED)
                 self.board.execute_multiple_moves(coord, dirs, is_red, OPPONENT)
             case GrowAction():
-                print(f"Testing: {color} played GROW action")
                 self.board.execute_grow(OPPONENT)
             case _:
                 raise ValueError(f"Unknown action type: {action}")
         
-        print("Time Remaining: ", referee["time_remaining"])
-        print("Space Remaining", referee["space_remaining"])
-        self.mcts.cache._save_cache("cache.json")
+        print("MCTS Time Remaining: ", referee["time_remaining"])
+        print("MCTS Space Remaining", referee["space_remaining"])
+        # self.mcts.cache._save_cache("cache.json")
 
     def _decode_action(self, action):
         directions = []

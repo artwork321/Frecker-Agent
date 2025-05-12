@@ -8,14 +8,14 @@ from agent.xgboost_convert.json_xgboost import JSON_XGBoost
 from .mcts_cache import MCTSCache
 
 EPS = 1e-8
-MAX_DEPTH = 1000
+MAX_DEPTH = 150
 N_BOARD = 8
 N_FROGS = 8
 DIR_TO_GOAL_IDS = [1, 2, 3]
 N_MOVES = 5
 GROW_ACTION = N_BOARD*N_BOARD*N_MOVES
 STAY_MOVE = N_BOARD*N_BOARD*N_MOVES + 1
-SMALL_DEPTH = 20
+SMALL_DEPTH = 15
 
 log = logging.getLogger(__name__)
 
@@ -36,11 +36,11 @@ class MCTS():
 
         self.Es = {}  # stores game.getGameEnded ended for board s
         self.Vs = {}  # stores game.getValidMoves for board s
+        self.Ws = {}  # store XGBoost predicted prob of win
 
-        self.cache = MCTSCache()
+        # self.cache = MCTSCache()
         
         self.cpuct = 1
-        
         self.step = 0
         
     def getAction(self, canonicalBoard, temp=1, step=1):
@@ -57,40 +57,14 @@ class MCTS():
             self.cpuct = self.args.cpuct_end
 
         for i in range(n_sims):
-            # print(f"sim num: {i}")
-            # self.search(canonicalBoard, depth=step)
             self.search(canonicalBoard, depth=step)
-        
-        pi, valids = self.getActionProb(canonicalBoard, temp)
-        action_idx = np.random.choice(len(pi), p=pi)
-        return valids[action_idx]
 
-    def getActionProb(self, canonicalBoard, temp=1):
-        """
-        This function performs numMCTSSims simulations of MCTS starting from
-        canonicalBoard.
-
-        Returns:
-            probs: a policy vector where the probability of the ith action is
-                   proportional to Nsa[(s,a)]**(1./temp)
-        """
         s = self.game.stringRepresentation(canonicalBoard)
-
-        valids = self.game.getValidMoves(canonicalBoard, player=1)
+        valids = self.Vs[s]
         counts = [self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in valids]
-
-        if temp == 0:
-            bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
-            bestA = np.random.choice(bestAs)
-            probs = [0] * len(counts)
-            probs[bestA] = 1
-            return probs, valids
-
-        counts = [x ** (1. / temp) for x in counts]
-        counts_sum = float(sum(counts))
-        # import pdb; pdb.set_trace()
-        probs = [x / counts_sum for x in counts]
-        return probs, valids
+        bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
+        bestA = np.random.choice(bestAs)
+        return valids[bestA]
 
     def search(self, canonicalBoard, depth=0):
         """
@@ -111,64 +85,49 @@ class MCTS():
         Returns:
             v: the negative of the value of the current canonicalBoard
         """
-        # print(f"search canonicalBoard: {canonicalBoard}")
         s = self.game.stringRepresentation(canonicalBoard)
         
         if depth >= MAX_DEPTH:
-            # print("⚠️ Max search depth reached, cutting off")
+            print("⚠️ Max search depth reached, cutting off")
             self.Es[s] = self.game.getGameEnded(canonicalBoard, 1, depth)
             return -self.Es[s] 
 
         if s not in self.Es:
             self.Es[s] = self.game.getGameEnded(canonicalBoard, 1)
-            # print(canonicalBoard)
-            # print(self.game.getGameEnded(canonicalBoard, 1))
         if self.Es[s] != 0:
-            # terminal node
-            # print(f"board at game end: {canonicalBoard}")
-            # print(self.game.getGameEnded(canonicalBoard, 1))
-            # print(f"Search terminates with depth {depth}")
-            # if depth == 1:
-            #     import pdb; pdb.set_trace()
             return -self.Es[s]
 
         if s not in self.Ps:
 
             # check if we have a cached prediction
-            cache = self.cache.get(canonicalBoard)
+            # cache = self.cache.get(canonicalBoard)
 
-            if cache is not None:
-                self.Ps[s], v, valids = cache
-            else:
-                # leaf node
-                self.Ps[s], v, valids = self.getPredictions(canonicalBoard, depth) 
-                # store the prediction in the cache
-                self.cache.set(canonicalBoard, self.Ps[s], v, valids)
+            # if cache is not None:
+            #     self.Ps[s], v, valids = cache
+            # else:
+            # leaf node
+
+            self.Ps[s], v, valids = self.getPredictions(canonicalBoard, depth) 
+            # store the prediction in the cache
+            # self.cache.set(canonicalBoard, self.Ps[s], v, valids)
 
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
                 self.Ps[s] /= sum_Ps_s  # renormalize
             else:
                 # if all valid moves were masked make all valid moves equally probable
-
-                # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
-                # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.   
-                # log.error("All valid moves were masked, doing a workaround.")
-                # import pdb; pdb.set_trace()
                 self.Ps[s] = [1] * len(valids)
                 self.Ps[s] /= np.sum(self.Ps[s])
 
             self.Vs[s] = valids
             self.Ns[s] = 0
-            # import pdb; pdb.set_trace()
             return -v
 
-        # valids = self.Vs[s]
+        valids = self.Vs[s]
         cur_best = -float('inf')
         best_act = -1
 
         # pick the action with the highest upper confidence bound
-        valids = self.game.getValidMoves(canonicalBoard, player=1)
         n_valids = len(valids)
         for i in range(n_valids):
             a = valids[i]
@@ -185,12 +144,9 @@ class MCTS():
         a = best_act
         next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
         next_s = self.game.getCanonicalForm(next_s, next_player)
-        # print(f"next_s:\n {next_s}")
-        # import pdb; pdb.set_trace()
 
         v = self.search(next_s, depth=depth + 1)
 
-        # print(f"adding into Qsa, Nsa")
         if (s, a) in self.Qsa:
             self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (self.Nsa[(s, a)] + 1)
             self.Nsa[(s, a)] += 1
@@ -206,7 +162,12 @@ class MCTS():
         """ return self.Ps[s]: vector of probs of actions from the current state
         v: chance of winning from the current state 
         """
-        v = self.model.predict(canonicalBoard)
+        s = self.game.stringRepresentation(canonicalBoard)
+        if not s in self.Ws:
+            v = self.model.predict(canonicalBoard)
+            self.Ws[s] = v
+        else:
+            v = self.Ws[s]
 
         if v is None:
             # Model is not fitted, switch to the rules of SmarterRandomAgent 
@@ -242,10 +203,17 @@ class MCTS():
                     
             if p_actions[i]:
                 next_state, next_player = self.game.getNextState(canonicalBoard, player=1, action=action)
-                next_state = self.game.getCanonicalForm(next_state, player=next_player) # TODO can be optimized
-                p_actions[i] *= (1 - self.model.predict(next_state))
-                
-        # print(f"prior {list(zip(valid_actions, p_actions))}")
+                next_state = self.game.getCanonicalForm(next_state, player=next_player) 
+
+                s = self.game.stringRepresentation(next_state)
+                if not s in self.Ws:
+                    win_rate = self.model.predict(next_state)
+                    self.Ws[s] = win_rate
+                else: 
+                    win_rate = self.Ws[s]
+
+                p_actions[i] *= 1 - win_rate
+
         return p_actions, v, valid_actions
     
     def getSmarterRandPolicy(self, canonicalBoard):
