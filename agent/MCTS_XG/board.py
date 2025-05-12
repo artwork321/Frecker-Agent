@@ -210,7 +210,6 @@ class Board():
         
         if not isinstance(directions, Direction) and len(directions)==1:
             directions = directions[0]
-            is_single_move = True
             
         if isinstance(directions, Direction):
             direction = (directions.r, directions.c)
