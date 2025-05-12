@@ -209,7 +209,7 @@ class Board():
             origin = ((N_BOARD - 1) - origin[0], origin[1])
         
         if not isinstance(directions, Direction) and len(directions)==1:
-            direction = directions[0]
+            directions = directions[0]
             
         if isinstance(directions, Direction):
             direction = (directions.r, directions.c)
