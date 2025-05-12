@@ -8,13 +8,13 @@ if current_dir not in sys.path:
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from transposition_table import ZobristHashing
+from Minimax.transposition_table import ZobristHashing
 import numpy as np
 import json
 
 # Simple MCTS cache for storing getPredictions output
 class MCTSCache:
-    def __init__(self, size=500000, cache_file="cache.json"):
+    def __init__(self, size=30000, cache_file="cache.json"):
         # key: zobrist hash, value: (p_actions, v, valid_actions)
         self.cache = {}
         self.zobrist = ZobristHashing()

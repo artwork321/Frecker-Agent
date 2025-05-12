@@ -11,7 +11,7 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 # Now imports will work in both environments
-from constants import *
+from Minimax.constants import *
 
 class AgentBoard:
 

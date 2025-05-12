@@ -14,7 +14,7 @@ if current_dir not in sys.path:
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from constants import *
+from Minimax.constants import *
 from minimax_utils import *
 from evaluation_functions import *
 from transposition_table import TranspositionTable, ZobristHashing, NodeType

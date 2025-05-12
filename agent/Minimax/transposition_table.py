@@ -1,7 +1,7 @@
 import numpy as np
 from enum import Enum
 import numpy as np
-from constants import *
+from Minimax.constants import *
 
 class NodeType(Enum):
     EXACT = 0    # Exact score
@@ -27,10 +27,10 @@ class TranspositionTable:
             
         # Implement a replacement strategy instead of disabling the table
         if len(self.table) >= self.size:
-            # Only replace entries with a deeper search or same position
+
             if zobrist_hash in self.table:
                 existing_entry = self.table[zobrist_hash]
-                # Only replace if current search is deeper or replaces a bound with exact
+  
                 if depth > existing_entry['depth'] or (node_type == NodeType.EXACT and existing_entry['node_type'] != NodeType.EXACT):
                     self.table[zobrist_hash] = {
                         'depth': depth,
@@ -38,10 +38,9 @@ class TranspositionTable:
                         'node_type': node_type,
                         'move': move
                     }
-            # If table is full, don't add new entries, but keep using existing ones
+
             return
             
-        # Check for hash collision (same hash but definitely different position - tracked for debugging)
         if zobrist_hash in self.table:
             self.collisions += 1
         

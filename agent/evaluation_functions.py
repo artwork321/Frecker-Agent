@@ -10,11 +10,10 @@ if current_dir not in sys.path:
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-
 from xgboost_convert.json_xgboost import JSON_XGBoost
-from constants import *
+from Minimax.constants import *
 
-
+# Evaluation for minimax, containing 5 features
 def simple_eval(state) -> float:
     """
     Evaluate the state by calculating the difference between RED and BLUE positions.
@@ -122,7 +121,7 @@ def simple_eval(state) -> float:
 
     return score
 
-
+# Slternative evaluation function for Minimax: adjusting weights
 def simple_alter_eval(state) -> float:
     """
     Evaluate the state by calculating the difference between RED and BLUE positions.
@@ -219,7 +218,7 @@ def simple_alter_eval(state) -> float:
 
     return score
 
-
+# XGBoost evaluation function
 def xgboost_eval(state, is_maximizer) -> float:
     model = JSON_XGBoost()
     

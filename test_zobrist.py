@@ -1,6 +1,6 @@
-from transposition_table import TranspositionTable
-from transposition_table import ZobristHashing
-from constants import *
+from agent.Minimax.transposition_table import TranspositionTable
+from agent.Minimax.transposition_table import ZobristHashing
+from agent.Minimax.constants import *
 import numpy as np
 
 test_zobrist_hashing = ZobristHashing()

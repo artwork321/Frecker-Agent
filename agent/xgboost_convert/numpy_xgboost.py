@@ -10,7 +10,7 @@ if current_dir not in sys.path:
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from constants import *
+from Minimax.constants import *
 
 class NP_XGBoost:
     # Class-level variable to cache the model across instances

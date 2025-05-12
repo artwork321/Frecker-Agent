@@ -11,7 +11,7 @@ if current_dir not in sys.path:
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from constants import *
+from Minimax.constants import *
 
 class SLOW_JSON_XGBoost:
     xg_model_json = None

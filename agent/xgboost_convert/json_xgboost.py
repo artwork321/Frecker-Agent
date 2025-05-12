@@ -11,7 +11,7 @@ if current_dir not in sys.path:
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from constants import *
+from Minimax.constants import *
 import time
 
 class JSON_XGBoost:
@@ -20,12 +20,13 @@ class JSON_XGBoost:
     _cached_trees = None
     _is_preprocessed = False
 
-    def __init__(self):
+    def __init__(self, model_name='model5.json'):
         # Use the cached model if available, otherwise load it
         if JSON_XGBoost._cached_model is None:
             start_time = time.time()
-            with open(os.path.join(os.path.dirname(__file__), '../model', 'model5.json'), 'r') as f:
+            with open(os.path.join(os.path.dirname(__file__), '../model', model_name), 'r') as f:
                 JSON_XGBoost._cached_model = json.load(f)
+                print(f"Model loaded from {model_name}")
             
             # Preprocess the model into a more efficient format
             self._preprocess_model(JSON_XGBoost._cached_model)

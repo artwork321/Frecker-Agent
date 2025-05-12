@@ -4,7 +4,7 @@ import time
 import numpy as np
 from agent.xgboost_convert.json_xgboost import JSON_XGBoost
 from agent.xgboost_convert.numpy_xgboost import NP_XGBoost
-from agent.constants import *
+from agent.Minimax.constants import *
 import os
 import shutil
 

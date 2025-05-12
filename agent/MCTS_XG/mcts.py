@@ -46,13 +46,16 @@ class MCTS():
         self.Vs = {}  # stores game.getValidMoves for board s
         self.Ws = {}  # store XGBoost predicted prob of win
 
-        self.cache = MCTSCache()
+        # self.cache = MCTSCache()
         
         self.cpuct = 1
         self.step = 0
         
-    def getAction(self, canonicalBoard, temp=1, step=1):
+    def getAction(self, canonicalBoard, temp=1, step=1, new_args=None):
         self.step = step
+
+        if new_args is not None:
+            self.args = new_args
 
         if self.step < self.args.mid:
             n_sims = self.args.numMCTSSims_start
@@ -108,14 +111,14 @@ class MCTS():
         if s not in self.Ps:
 
             # check if we have a cached prediction
-            cache = self.cache.get(canonicalBoard)
+            # cache = self.cache.get(canonicalBoard)
 
-            if cache is not None:
-                self.Ps[s], v, valids = cache
-            else:
-                self.Ps[s], v, valids = self.getPredictions(canonicalBoard, depth) 
+            # if cache is not None:
+            #     self.Ps[s], v, valids = cache
+            # else:
+            self.Ps[s], v, valids = self.getPredictions(canonicalBoard, depth) 
                 # store the prediction in the cache
-                self.cache.set(canonicalBoard, self.Ps[s], v, valids)
+                # self.cache.set(canonicalBoard, self.Ps[s], v, valids)
 
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:

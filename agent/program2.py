@@ -51,10 +51,11 @@ class Agent:
         self._color = color
         self.board = Board(N_BOARD)
         self.game = FreckersGame(N_BOARD)
-        model = JSON_XGBoost('model5.json')
-        args = dotdict({'numMCTSSims_start': 100, 'numMCTSSims_mid': 200, 'numMCTSSims_end': 100, 
+        model = JSON_XGBoost('model3.json')
+        args = dotdict({'numMCTSSims_start': 40, 'numMCTSSims_mid': 80, 'numMCTSSims_end': 80, 
                         'mid': 10, 'end': 50,
                         'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
+
                         'grow_multiplier': 1.5,
                         'target_move_multiplier': 2,
                         'target_jump_multiplier': 3,
@@ -67,25 +68,7 @@ class Agent:
         This method is called by the referee each time it is the agent's turn
         to take an action. It must always return an action object. 
         """
-        args = None
-        if referee["time_remaining"] < 30:
-            args = dotdict({'numMCTSSims_start': 30, 'numMCTSSims_mid': 75, 'numMCTSSims_end': 50, 
-                            'mid': 10, 'end': 50,
-                            'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
-                            'grow_multiplier': 1.75,
-                            'target_move_multiplier': 2,
-                            'target_jump_multiplier': 3,
-                            'target_opp_jump_multiplier': 5})
-        elif referee["time_remaining"] < 60:
-            args = dotdict({'numMCTSSims_start': 50, 'numMCTSSims_mid': 120, 'numMCTSSims_end': 120, 
-                            'mid': 10, 'end': 50,
-                            'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
-                            'grow_multiplier': 1.75,
-                            'target_move_multiplier': 2,
-                            'target_jump_multiplier': 3,
-                            'target_opp_jump_multiplier': 5})
-
-        action = self.mcts.getAction(self.board.getBoard(), temp=0, step=self.step, new_args=args)
+        action = self.mcts.getAction(self.board.getBoard(), temp=0, step=self.step)
 
         if action[0] == GROW_ACTION_IDX:
             self.board.execute_grow(PLAYER)
