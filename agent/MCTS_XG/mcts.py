@@ -13,7 +13,7 @@ if parent_dir not in sys.path:
 
 from MCTS_XG.game import FreckersGame
 from xgboost_convert.json_xgboost import JSON_XGBoost
-# from mcts_cache import MCTSCache
+from MCTS_XG.mcts_cache import MCTSCache
 
 EPS = 1e-8
 MAX_DEPTH = 150

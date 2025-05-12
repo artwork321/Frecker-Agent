@@ -4,6 +4,9 @@
 import os 
 import sys
 
+from referee.game import PlayerColor, Coord, Direction, \
+    Action, MoveAction, GrowAction
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 if current_dir not in sys.path:
@@ -12,8 +15,6 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from utils import *
-from referee.game import PlayerColor, Coord, Direction, \
-    Action, MoveAction, GrowAction
 from MCTS_XG.mcts import MCTS
 from MCTS_XG.game import FreckersGame
 from MCTS_XG.board import Board
