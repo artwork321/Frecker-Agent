@@ -68,10 +68,12 @@ class JSON_XGBoost:
         delta_centrality = player_features["col centrality score"] - opp_features["col centrality score"]
         delta_avg_col = player_features["avg col"] - opp_features["avg col"]
         delta_avg_reachable_pads = player_features["avg reachable pads"] - opp_features["avg reachable pads"]
-        features = np.concatenate([features, [delta_n_frogs_at_goal, delta_avg_dist, delta_target_jump, 
-                                            delta_interaction, delta_centrality, delta_avg_col, 
-                                            delta_avg_reachable_pads]])
+        delta_near_goal_ratio = player_features["near goal ratio"] - opp_features["near goal ratio"]
+        delta_grow_needed_ratio = player_features["grow needed ratio"] - opp_features["grow needed ratio"]
 
+        features = np.concatenate([features, [delta_n_frogs_at_goal, delta_avg_dist, delta_target_jump, 
+                                          delta_interaction, delta_centrality, delta_avg_col, 
+                                          delta_avg_reachable_pads, delta_near_goal_ratio, delta_grow_needed_ratio]])
         return features
 
     def compute_features_single_frog(self, board, player_color=1):
