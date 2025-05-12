@@ -69,21 +69,30 @@ class Agent:
         """
         args = None
         if referee["time_remaining"] < 30:
-            args = dotdict({'numMCTSSims_start': 30, 'numMCTSSims_mid': 75, 'numMCTSSims_end': 50, 
+            args = dotdict({'numMCTSSims_start': 30, 'numMCTSSims_mid': 75, 'numMCTSSims_end': 60, 
                             'mid': 10, 'end': 50,
                             'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
-                            'grow_multiplier': 1.75,
+                            'grow_multiplier': 1.5,
                             'target_move_multiplier': 2,
                             'target_jump_multiplier': 3,
                             'target_opp_jump_multiplier': 5})
         elif referee["time_remaining"] < 60:
-            args = dotdict({'numMCTSSims_start': 50, 'numMCTSSims_mid': 120, 'numMCTSSims_end': 120, 
+            args = dotdict({'numMCTSSims_start': 60, 'numMCTSSims_mid': 120, 'numMCTSSims_end': 80, 
                             'mid': 10, 'end': 50,
                             'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
-                            'grow_multiplier': 1.75,
+                            'grow_multiplier': 1.5,
                             'target_move_multiplier': 2,
                             'target_jump_multiplier': 3,
                             'target_opp_jump_multiplier': 5})
+        elif referee["time_remaining"] < 100:
+            args = dotdict({'numMCTSSims_start': 80, 'numMCTSSims_mid': 150, 'numMCTSSims_end': 80, 
+                            'mid': 10, 'end': 50,
+                            'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
+                            'grow_multiplier': 1.5,
+                            'target_move_multiplier': 2,
+                            'target_jump_multiplier': 3,
+                            'target_opp_jump_multiplier': 5})
+
 
         action = self.mcts.getAction(self.board.getBoard(), temp=0, step=self.step, new_args=args)
 
