@@ -16,7 +16,7 @@ if parent_dir not in sys.path:
 
 from Minimax.constants import *
 from minimax_utils import *
-from evaluation_functions import *
+from Minimax.evaluation_functions import *
 from transposition_table import TranspositionTable, ZobristHashing, NodeType
 
 

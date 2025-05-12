@@ -1,0 +1,16 @@
+cffi
+coloredlogs
+cython
+flask
+gitpython
+matplotlib
+numpy
+pandas
+scipy
+scikit-learn
+scikit-image
+torchfile
+torchvision
+tqdm
+visdom
+torch  # Add torch (PyTorch CPU)

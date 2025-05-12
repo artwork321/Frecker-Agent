@@ -1,0 +1,62 @@
+# Start from Ubuntu 22.04 base image
+FROM ubuntu:22.04
+
+# Prevent tzdata and apt from asking questions during build
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install essential system packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    curl \
+    vim \
+    ssh \
+    tzdata \
+    ca-certificates \
+    libjpeg-dev \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libpng-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniforge (ARM64 Conda installer for Apple Silicon / M1/M2)
+RUN curl -L -o ~/miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh && \
+    chmod +x ~/miniforge.sh && \
+    ~/miniforge.sh -b -p /opt/conda && \
+    rm ~/miniforge.sh
+
+# Set Conda in PATH
+ENV PATH="/opt/conda/bin:$PATH"
+
+# Install Python libraries via Conda
+RUN conda install numpy pyyaml scipy cython jupyter ipython && \
+    conda install pytorch torchvision torchaudio cpuonly -c pytorch -c conda-forge && \
+    conda clean -ya
+
+# Set up working directory for installing extra Python dependencies
+WORKDIR /opt/pytorch
+
+# Copy and install Python packages from requirements.txt
+COPY ./docker/requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Set workspace as working directory
+WORKDIR /workspace
+RUN chmod -R a+w /workspace
+
+# Expose necessary ports for Jupyter and Visdom
+EXPOSE 8888
+EXPOSE 8097
+
+# Set up Jupyter configuration
+COPY ./docker/jupyter_notebook_config.py /root/.jupyter/
+
+# Copy run script
+COPY ./docker/run_jupyter.sh /
+RUN chmod +x /run_jupyter.sh
+
+# Default command: launch Jupyter
+CMD ["/run_jupyter.sh", "--allow-root"]
+
