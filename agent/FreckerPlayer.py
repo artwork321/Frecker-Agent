@@ -1561,7 +1561,7 @@ class MiniMaxAgent:
         beta = math.inf
 
         for move in possible_actions:
-            max_depth = 3
+            max_depth = 5
             # Only increment node count if we do a full search
             # Nodes inside minimax will be counted separately
 
@@ -1586,12 +1586,10 @@ class MiniMaxAgent:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
 
-            if mid_end_game and referee["time_remaining"] >= 60: 
-                max_depth += 2
+            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: 
+                max_depth += 1
             elif referee["time_remaining"] < 30 and max_depth > 3: 
                 max_depth -= 2
-            elif referee["time_remaining"] < 60 and max_depth > 3: 
-                max_depth -= 1
                 
             # Check transposition table before calling minimax
             value = None
@@ -1661,14 +1659,6 @@ class MiniMaxAgent:
             if tt_entry is not None and tt_entry['depth'] >= depth:
                 if tt_entry['node_type'] == NodeType.EXACT:
                     return tt_entry['score']
-                # elif tt_entry['node_type'] == NodeType.LOWER_BOUND:
-                #     alpha = max(alpha, tt_entry['score'])
-                # elif tt_entry['node_type'] == NodeType.UPPER_BOUND:
-                #     beta = min(beta, tt_entry['score'])
-                
-                # # If we have an alpha-beta cutoff after updating bounds
-                # if alpha >= beta:
-                #     return tt_entry['score']
                 
         # Count this as a node expansion
         self._num_nodes += 1
@@ -1868,7 +1858,7 @@ class MiniMaxAgent:
             print(f"Saving game state to {filename}")
             json.dump(state_data, f, indent=2)
 
-# Minimax agent using XGBoost evaluation function
+# Minimax agent using XGBoost evaluation function -- working
 class MLMiniMaxAgent:
     """
     This class implements a game-playing agent using the Minimax algorithm.

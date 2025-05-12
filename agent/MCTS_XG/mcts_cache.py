@@ -115,15 +115,22 @@ class MCTSCache:
                     
                     if isinstance(valid_actions, list):
                         try:
-                            valid_actions = np.array(valid_actions, dtype=np.int32)
-                        except ValueError:
-                            valid_actions = np.array(valid_actions, dtype=object)
+                            # Convert to tuple of integers directly
+                            valid_actions = tuple(int(x) for x in valid_actions)
+                        except (TypeError, ValueError):
+                            # Handle nested lists recursively
+                            def make_hashable(item):
+                                if isinstance(item, list):
+                                    return tuple(make_hashable(i) for i in item)
+                                return item
+                            valid_actions = make_hashable(valid_actions)
                     
                     self.cache[key] = (p_actions, v, valid_actions)
                     
                 self.stores = len(self.cache)
                 self.hits = 0
                 self.collisions = 0
+
         except (FileNotFoundError, json.JSONDecodeError):
             # Handle the case where the file doesn't exist or is corrupt
             print(f"No cache file found or file is corrupt. Starting with empty cache.")

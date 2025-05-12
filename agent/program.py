@@ -53,12 +53,12 @@ class Agent:
         self.board = Board(N_BOARD)
         self.game = FreckersGame(N_BOARD)
         model = JSON_XGBoost()
-        args = dotdict({'numMCTSSims_start': 40, 'numMCTSSims_mid': 75, 'numMCTSSims_end': 30, 
-                        'mid': 15, 'end': 50,
+        args = dotdict({'numMCTSSims_start': 40, 'numMCTSSims_mid': 80, 'numMCTSSims_end': 80, 
+                        'mid': 10, 'end': 50,
                         'cpuct_start': 1.5, 'cpuct_mid': 1.5, 'cpuct_end': 1,
 
-                        'grow_multiplier': 1,
-                        'target_move_multiplier': 1,
+                        'grow_multiplier': 1.5,
+                        'target_move_multiplier': 2,
                         'target_jump_multiplier': 3,
                         'target_opp_jump_multiplier': 5})
         self.mcts = MCTS(self.game, model, args)
@@ -79,7 +79,7 @@ class Agent:
         origin, directions = self._decode_action(action)
 
         self.board.setPieces(next_state)
-        # print(f"MCST Cache: ", self.mcts.cache.get_stats())
+        print(f"MCST Cache: ", self.mcts.cache.get_stats())
         return MoveAction(origin, directions)
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
@@ -103,7 +103,7 @@ class Agent:
         
         print("MCTS Time Remaining: ", referee["time_remaining"])
         print("MCTS Space Remaining", referee["space_remaining"])
-        # self.mcts.cache._save_cache("cache.json")
+        self.mcts.cache._save_cache("cache.json")
 
     def _decode_action(self, action):
         directions = []
