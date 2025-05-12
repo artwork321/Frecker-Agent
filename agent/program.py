@@ -1,14 +1,25 @@
 # COMP30024 Artificial Intelligence, Semester 1 2025
 # Project Part B: Game Playing Agent
-from agent.utils import *
+
+import os 
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from utils import *
 
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
 
-from agent.MCTS_XG.mcts import MCTS
-from agent.MCTS_XG.game import FreckersGame
-from agent.MCTS_XG.board import Board
-from agent.xgboost_convert.json_xgboost import JSON_XGBoost
+from MCTS_XG.mcts import MCTS
+from MCTS_XG.game import FreckersGame
+from MCTS_XG.board import Board
+from xgboost_convert.json_xgboost import JSON_XGBoost
 
 N_BOARD = 8
 N_MOVES = 5

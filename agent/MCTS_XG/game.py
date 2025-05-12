@@ -1,7 +1,15 @@
 from __future__ import print_function
+import os 
 import sys
-sys.path.append('..')
-from .board import Board
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from MCTS_XG.board import Board
 import numpy as np
 
 N_FROGS = 6

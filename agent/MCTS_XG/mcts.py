@@ -1,11 +1,21 @@
+import os 
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 import logging
 import math
 
 import numpy as np
 
-from .game import FreckersGame
-from agent.xgboost_convert.json_xgboost import JSON_XGBoost
-from .mcts_cache import MCTSCache
+from game import FreckersGame
+from xgboost_convert.json_xgboost import JSON_XGBoost
+from mcts_cache import MCTSCache
 
 EPS = 1e-8
 MAX_DEPTH = 150
