@@ -56,7 +56,7 @@ class MCTS_Agent:
 
         self.game = FreckersGame(N_BOARD)
         model = JSON_XGBoost()
-        args = dotdict({'numMCTSSims_start': 30, 'numMCTSSims_mid': 80, 'numMCTSSims_end': 60, 
+        args = dotdict({'numMCTSSims_start': 30, 'numMCTSSims_mid': 80, 'numMCTSSims_end': 20, 
                         'mid': 15, 'end': 45,
                         'cpuct_start': 1.5, 'cpuct_mid': 1.75, 'cpuct_end': 1,
 

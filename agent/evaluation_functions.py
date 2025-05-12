@@ -12,7 +12,6 @@ if parent_dir not in sys.path:
 
 
 from xgboost_convert.json_xgboost import JSON_XGBoost
-from xgboost_convert.numpy_xgboost import NP_XGBoost
 from constants import *
 
 
@@ -113,8 +112,8 @@ def simple_eval(state) -> float:
         weights = [5.0,    # Finished frogs (most important)
             0.3,    # Jump opportunities (good to have options)
             -2.0,    # Distance to goal (very important)
-            0.0,    # Clustering (want frogs to be together)
-            0.0]       # Blocked frogs (not want frogs to have no way to move forward)
+            0.00,    # Clustering (dont want frogs to be together)
+            0.0]       # Blocked frogs
 
     features = [finished_diff, jump_score_diff, total_dis_diff, internal_dis_diff, block_score_diff]
     
@@ -260,8 +259,3 @@ def xgboost_eval(state, is_maximizer) -> float:
         else:
             score = model.predict(board) # BLUE turn, get probability of BLUE winning
             return (1-score) # minimize the probability of BLUE losing
-
-
-def np_xgboost_eval(state) -> float:
-    model = NP_XGBoost()
-    return model.predict(state.pieces, 1, maximum_trees=200)

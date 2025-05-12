@@ -321,7 +321,8 @@ class GreedyAgent:
             is_grow = move is None 
 
             self._internal_state.apply_action(move, is_grow=is_grow)
-            score = self._evaluate()
+            multiplier = self.multiply(move, self.color.value)
+            score = self._evaluate() * multiplier
 
             if score > max_score:
                 max_score = score
@@ -348,57 +349,39 @@ class GreedyAgent:
 
 
     def _evaluate(self) -> float:
+        score = xgboost_eval(self._internal_state, True) # probability of red winning
 
-        def get_est_distance(target, curr_frog) -> int:
-            """
-            Estimate the distance between a frog and a target lily pad.
-            """
-            verti_dist = abs(target[0] - curr_frog[0])
-            horiz_dist = abs(target[1] - curr_frog[1])
-            n_diag_moves = min(verti_dist, horiz_dist)
-            return verti_dist + horiz_dist - n_diag_moves
-
-
-        def calculate_safety_penalty(remaining_frogs) -> float:
-            """
-            Calculate the safety penalty for a given set of frogs.
-            """
-            score = 0
-
-            legal_directions = self._internal_state.get_possible_directions()
-            legal_directions = [d for d in legal_directions if d not in [(0, 1), (0, -1)]]  # Remove left and right
-
-            for frog in remaining_frogs:
-                for direction in legal_directions:
-                    _, _, is_jump = self._internal_state._get_destination(frog, direction)
-    
-                    if (is_jump):
-                        print(frog, direction)
-                        score += 1
-
-            return score
-
-        # Feature 1: Number of frogs on the target lily pads -- want to maximize this
-        target_lily_pad = (7, 0) if self.color == PlayerColor.RED else (0, 0)
-        player_frogs = self._internal_state._red_frogs if self.color == PlayerColor.RED else self._internal_state._blue_frogs
-        finished_frogs = [frog for frog in player_frogs if frog[0] == target_lily_pad[0]]
-
-        
-        # Feature 2: Score for the number of jumps opponent can make -- want to reduce this
-        remaining_frog = [frog for frog in player_frogs if frog not in finished_frogs]
-        jumps_possible_score = calculate_safety_penalty(remaining_frog)
-
-        # Feature 3: Sum of the distance of the frogs to the nearest target lily pads -- want to reduce this
-        total_dis = sum(get_est_distance((target_lily_pad[0], frog[1]), frog) for frog in player_frogs)
-
-        # Calculate scores for RED and BLUE
-        weights = [1, 1, -1]  # Weights for each feature
-        all_score = [len(finished_frogs), jumps_possible_score, total_dis]
-        score = sum(w * s for w, s in zip(weights, all_score))
+        if self.color == PlayerColor.BLUE:
+            score = 1-score
 
         return score
 
    
+    def multiply(self, move, turn_color):
+        multiplier = 1
+
+        if move is not None:
+            origin, directions, endpoint = move
+            
+            jump_times = len(directions)
+            is_multiple_jump = jump_times > 1
+            is_near_goal = origin[0] >= 5 if turn_color == 1 else origin[0] <= 2
+            is_goal = endpoint[0] == 7 if turn_color == 1 else endpoint[0] == 0
+            is_at_goal = origin[0] == 7 if turn_color == 1 else origin[0] == 0
+            is_near_start = origin[0] <= 2 if turn_color == 1 else origin[0] >= 5
+
+            if is_multiple_jump and abs(endpoint[0] - origin[0]) > 1 and origin[0] : # a forward multiple jump forward
+                multiplier = 5**len(directions) 
+            elif is_near_goal and abs(endpoint[0] - origin[0]) >= 1: # near goal and not at goal then encourage move to goal 
+                multiplier = 10
+            elif is_near_start and abs(endpoint[0] - origin[0]) >= 1: # frog is not moving so much so encourage to move
+                multiplier = 5
+            elif abs(endpoint[0] - origin[0]) > 1: # encourage jumping forward
+                multiplier = 3 
+
+
+        return multiplier 
+    
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         """
         Updates the agent's internal game state after a player takes their turn.
@@ -1335,12 +1318,11 @@ class CorrectMiniMaxAgent:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
 
-            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: 
-                max_depth += 2
-            elif referee["time_remaining"] < 100 and max_depth > 4:
-                max_depth -= 2
-            elif referee["time_remaining"] < 60 and max_depth > 2: 
+            if (is_grow or mid_end_game) and referee["time_remaining"] >= 100: 
+                max_depth += 1
+            elif referee["time_remaining"] < 60 and max_depth >= 5: 
                 max_depth -= 1
+
 
             # Pass alpha-beta values to minimax (starting with max_depth)
             value = self._minimax(depth=max_depth-1, alpha=alpha, beta=beta, is_pruning=PRUNING)
@@ -1579,7 +1561,7 @@ class MiniMaxAgent:
         beta = math.inf
 
         for move in possible_actions:
-            max_depth = 5
+            max_depth = 3
             # Only increment node count if we do a full search
             # Nodes inside minimax will be counted separately
 
@@ -1606,8 +1588,8 @@ class MiniMaxAgent:
 
             if mid_end_game and referee["time_remaining"] >= 60: 
                 max_depth += 2
-            elif referee["time_remaining"] < 100 and max_depth > 4:
-                max_depth -= 1
+            elif referee["time_remaining"] < 30 and max_depth > 3: 
+                max_depth -= 2
             elif referee["time_remaining"] < 60 and max_depth > 3: 
                 max_depth -= 1
                 
@@ -1679,14 +1661,14 @@ class MiniMaxAgent:
             if tt_entry is not None and tt_entry['depth'] >= depth:
                 if tt_entry['node_type'] == NodeType.EXACT:
                     return tt_entry['score']
-                elif tt_entry['node_type'] == NodeType.LOWER_BOUND:
-                    alpha = max(alpha, tt_entry['score'])
-                elif tt_entry['node_type'] == NodeType.UPPER_BOUND:
-                    beta = min(beta, tt_entry['score'])
+                # elif tt_entry['node_type'] == NodeType.LOWER_BOUND:
+                #     alpha = max(alpha, tt_entry['score'])
+                # elif tt_entry['node_type'] == NodeType.UPPER_BOUND:
+                #     beta = min(beta, tt_entry['score'])
                 
-                # If we have an alpha-beta cutoff after updating bounds
-                if alpha >= beta:
-                    return tt_entry['score']
+                # # If we have an alpha-beta cutoff after updating bounds
+                # if alpha >= beta:
+                #     return tt_entry['score']
                 
         # Count this as a node expansion
         self._num_nodes += 1

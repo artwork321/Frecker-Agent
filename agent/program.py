@@ -20,7 +20,7 @@ from minimax_utils import *
 from evaluation_functions import *
 from transposition_table import TranspositionTable, ZobristHashing, NodeType
 
-
+# Minimax agent with correct pruning and transposition table     
 class Agent:
     """
     This class implements a game-playing agent using the Minimax algorithm.
@@ -65,13 +65,12 @@ class Agent:
         beta = math.inf
 
         for move in possible_actions:
-            max_depth = DEPTH_LIMIT
+            max_depth = 5
             # Only increment node count if we do a full search
             # Nodes inside minimax will be counted separately
 
             is_grow = move is None 
             self._internal_state.apply_action(move, is_grow=is_grow)
-            multiplier = self.multiply(move, -self._internal_state._turn_color)
             
             if is_grow:
                 action = GrowAction()
@@ -91,10 +90,10 @@ class Agent:
                 origin, _, _ = move
                 mid_end_game = origin[0] >= 2 if self._is_maximizer else origin[0] <= 5
 
-            if (is_grow or mid_end_game) and referee["time_remaining"] >= 60: 
-                max_depth += ADDITIONAL_DEPTH
-            elif referee["time_remaining"] < 60 and max_depth > 1: 
-                max_depth -= ADDITIONAL_DEPTH
+            if mid_end_game and referee["time_remaining"] >= 60: 
+                max_depth += 1
+            elif referee["time_remaining"] < 50 and max_depth >= 5: 
+                max_depth -= 2
                 
             # Check transposition table before calling minimax
             value = None
@@ -109,7 +108,7 @@ class Agent:
             # If no TT entry found or TT disabled, perform search
             if value is None:
                 # Call minimax with alpha-beta values
-                value = self._minimax(depth=max_depth-1, alpha=alpha, beta=beta, is_pruning=PRUNING) * multiplier
+                value = self._minimax(depth=max_depth-1, alpha=alpha, beta=beta, is_pruning=PRUNING)
             
             # Update best action based on maximizer/minimizer role
             if self._is_maximizer and value > best_value:
@@ -164,14 +163,14 @@ class Agent:
             if tt_entry is not None and tt_entry['depth'] >= depth:
                 if tt_entry['node_type'] == NodeType.EXACT:
                     return tt_entry['score']
-                elif tt_entry['node_type'] == NodeType.LOWER_BOUND:
-                    alpha = max(alpha, tt_entry['score'])
-                elif tt_entry['node_type'] == NodeType.UPPER_BOUND:
-                    beta = min(beta, tt_entry['score'])
+                # elif tt_entry['node_type'] == NodeType.LOWER_BOUND:
+                #     alpha = max(alpha, tt_entry['score'])
+                # elif tt_entry['node_type'] == NodeType.UPPER_BOUND:
+                #     beta = min(beta, tt_entry['score'])
                 
-                # If we have an alpha-beta cutoff after updating bounds
-                if alpha >= beta:
-                    return tt_entry['score']
+                # # If we have an alpha-beta cutoff after updating bounds
+                # if alpha >= beta:
+                #     return tt_entry['score']
                 
         # Count this as a node expansion
         self._num_nodes += 1
@@ -206,8 +205,7 @@ class Agent:
                 self._internal_state.apply_action(move, is_grow=is_grow)
                 
                 # Pass the updated alpha value to deeper search levels with decremented depth
-                multiplier = self.multiply(move, -self._internal_state._turn_color)
-                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning) * multiplier
+                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning)
                 self._internal_state.undo_action(is_grow=is_grow)
 
                 if eval_score > max_eval:
@@ -247,10 +245,9 @@ class Agent:
                 is_grow = move is None
 
                 self._internal_state.apply_action(move, is_grow=is_grow)
-                multiplier = self.multiply(move, -self._internal_state._turn_color)
                 
                 # Pass the updated beta value to deeper search levels with decremented depth
-                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning) * multiplier
+                eval_score = self._minimax(depth - 1, alpha, beta, is_pruning)
                 self._internal_state.undo_action(is_grow=is_grow)
 
                 if eval_score < min_eval:
@@ -275,33 +272,9 @@ class Agent:
                 
 
     def _evaluate(self) -> float:
-        score = xgboost_eval(self._internal_state, self._is_maximizer)
+        score = simple_eval(self._internal_state)
         return score
-    
-    def multiply(self, move, turn_color):
-        multiplier = 1
-
-        if move is not None:
-            origin, directions, endpoint = move
-            
-            jump_times = len(directions)
-            is_multiple_jump = jump_times > 1
-            is_near_goal = origin[0] >= 5 if turn_color == 1 else origin[0] <= 2
-            is_goal = endpoint[0] == 7 if turn_color == 1 else endpoint[0] == 0
-            is_at_goal = origin[0] == 7 if turn_color == 1 else origin[0] == 0
-            is_near_start = origin[0] <= 2 if turn_color == 1 else origin[0] >= 5
-
-            if is_multiple_jump and abs(endpoint[0] - origin[0]) > 1 and origin[0] : # a forward multiple jump forward
-                multiplier = 5**len(directions) if turn_color == 1 else 1/(5**len(directions))
-            elif is_near_goal and abs(endpoint[0] - origin[0]) >= 1: # near goal and not at goal then encourage move to goal 
-                multiplier = 10 if turn_color == 1 else 1/10
-            elif is_near_start and abs(endpoint[0] - origin[0]) >= 1: # frog is not moving so much so encourage to move
-                multiplier = 5 if turn_color == 1 else 1/5
-            elif abs(endpoint[0] - origin[0]) > 1: # encourage jumping forward
-                multiplier = 3 if turn_color == 1 else 1/3
-
-
-        return multiplier 
+        
 
     def update(self, color: PlayerColor, action: Action, **referee: dict):
         """

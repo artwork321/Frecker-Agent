@@ -12,6 +12,7 @@ class MCTSCache:
         self.hits = 0
         self.limits = size
         self.collisions = 0
+        self.search_times = 0
         try:
             self._load_cache(cache_file)
             print(f"Cache loaded with {self.stores} entries.")
@@ -25,6 +26,7 @@ class MCTSCache:
         zobrist_hash = self.zobrist.generate_zobrist_hash(board, turn_color)
         key = str(zobrist_hash)  # Convert to string to make it hashable
         entry = self.cache.get(key, None)
+        self.search_times += 1
         if entry is not None:
             self.hits += 1
             return entry
@@ -63,7 +65,7 @@ class MCTSCache:
             'hits': self.hits,
             'stores': self.stores,
             'collisions': self.collisions,
-            'hit_rate': (self.hits / self.stores) if self.stores > 0 else 0,
+            'hit_rate': (self.hits / self.search_times) if self.search_times > 0 else 0,
         }
         
     def save(self, filename="cache.json"):
