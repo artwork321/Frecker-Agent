@@ -1,6 +1,7 @@
 from __future__ import print_function
 import os 
 import sys
+import numpy as np
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -10,7 +11,6 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from MCTS_XG.board import Board
-import numpy as np
 
 N_FROGS = 6
 N_BOARD = 8
@@ -56,8 +56,6 @@ class FreckersGame():
     def getNextState(self, board, player, action):
         b = Board(self.n)
         b.setPieces(np.copy(board))
-        if len(b.player_cells[1]) != N_FROGS or len(b.player_cells[-1]) != N_FROGS:
-            import pdb; pdb.set_trace()
 
         if action[0] == GROW_ACTION:
             b.execute_grow(player)

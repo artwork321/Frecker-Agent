@@ -1,5 +1,6 @@
 import os 
 import sys
+import numpy as np
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -8,7 +9,6 @@ if current_dir not in sys.path:
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-import numpy as np
 from referee.game import Direction
 
 RED = 1
@@ -173,7 +173,6 @@ class Board():
         """Perform the given move on the board.
         color gives the color of the piece to play (1=red,-1=blue)
         """
-
         x, y = origin
         self.pieces[x][y] = EMPTY
 
@@ -181,18 +180,10 @@ class Board():
         if self.pieces[x][y] == color or self.pieces[x][y] == -color:
             # jump
             x, y = self._get_move_endpoint((x, y), direction)
-            
-        if self.pieces[x][y] != PAD:
-            import pdb; pdb.set_trace()
 
         self.pieces[x][y] = color
-        if origin not in self.player_cells[color]:
-            import pdb; pdb.set_trace()
         self.player_cells[color].remove(origin)
         self.player_cells[color].append((x, y))
-
-        if not self._is_valid_square(x, y):
-            import pdb; pdb.set_trace()
 
     def execute_multi_jump(self, origin, jump_directions, color):
         x, y = origin
@@ -201,12 +192,7 @@ class Board():
         for jump_dir in jump_directions:
             x, y = self._get_move_endpoint((x, y), jump_dir)
 
-        if self.pieces[x][y] != PAD:
-            import pdb; pdb.set_trace()
-
         self.pieces[x][y] = color
-        if origin not in self.player_cells[color]:
-            import pdb; pdb.set_trace()
         self.player_cells[color].remove(origin)
         self.player_cells[color].append((x, y))
 
@@ -232,14 +218,7 @@ class Board():
             self.pieces[x][y] = EMPTY
             x, y = self._get_multi_jump_endpoint(origin, directions, is_red)
 
-            if self.pieces[x][y] != PAD:
-                import pdb; pdb.set_trace()
-
             self.pieces[x][y] = color
-
-            if origin not in self.player_cells[color]:
-                import pdb; pdb.set_trace()
-
             self.player_cells[color].remove(origin)
             self.player_cells[color].append((x, y))
 

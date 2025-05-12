@@ -12,10 +12,8 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from utils import *
-
 from referee.game import PlayerColor, Coord, Direction, \
     Action, MoveAction, GrowAction
-
 from MCTS_XG.mcts import MCTS
 from MCTS_XG.game import FreckersGame
 from MCTS_XG.board import Board
